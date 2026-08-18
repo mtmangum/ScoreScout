@@ -2,9 +2,21 @@
 
 A map-first explorer for Austin restaurant health inspections. ScoreScout shows the latest official Austin Public Health inspection score for a restaurant alongside a derived, explainable **Inspection History Profile** — a weighted view of recent inspection history, not a food-safety verdict.
 
+Live at [scorescout.org](https://www.scorescout.org).
+
+![ScoreScout explore view: a map with score-colored clusters and pins next to a restaurant's inspection history detail panel](docs/images/explore-view.jpg)
+
 ## Why
 
 Routine inspections are point-in-time snapshots. ScoreScout summarizes available inspection history so a diner can see the trend at a glance, without implying that the app independently judges whether a restaurant is safe or clean.
+
+## Features
+
+- Map with score-aware clustering — nearby restaurants group into bubbles colored by the worst score in the group, splitting into individual pins as you zoom in
+- Search by name or address, filter by inspection profile range, sort by score/date/name
+- Shareable per-restaurant links
+- Save/favorite restaurants (persisted locally)
+- Light/dark theme, following system preference by default
 
 ## Data source
 
@@ -26,8 +38,9 @@ The Google enrichment function only accepts matches at or above the configured c
 
 - React + Vite + TypeScript
 - React Router for shareable restaurant deep links
-- Leaflet / React-Leaflet for the map
-- Vitest for unit tests (scoring logic)
+- Leaflet / React-Leaflet + Supercluster for the map
+- Supabase (Postgres + PostGIS) for data, Netlify Functions for the API and import/enrichment jobs
+- Vitest for unit tests (scoring logic, URL-matching logic)
 
 ## Getting started
 
@@ -71,4 +84,4 @@ Netlify deployment is configured in `netlify.toml`:
 
 ## Status
 
-Early development (MVP in progress).
+Live with real Austin inspection data. Known limitations: the public API caps at 1,000 rows for the unscoped map/browse view (search is unaffected), and the source dataset includes non-restaurant food establishments (schools, grocery stores, etc.) not yet filtered out. See [docs/current-state.md](docs/current-state.md) for the full list.

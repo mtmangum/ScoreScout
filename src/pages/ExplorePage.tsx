@@ -6,6 +6,8 @@ import { RestaurantList } from '../components/RestaurantList'
 import { useRestaurants } from '../hooks/useRestaurants'
 import scoreScoutLogo from '../assets/scorescout-logo.png'
 
+type RestaurantSort = 'score-desc' | 'score-asc' | 'inspection-desc' | 'name-asc'
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -22,6 +24,7 @@ export function ExplorePage() {
   const [query, setQuery] = useState('')
   const [scoreMinimum, setScoreMinimum] = useState(50)
   const [scoreMaximum, setScoreMaximum] = useState(100)
+  const [sortBy, setSortBy] = useState<RestaurantSort>('score-desc')
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return restaurants.filter((restaurant) =>
@@ -54,9 +57,17 @@ export function ExplorePage() {
     return null
   }, [restaurants, facilityId, cityCode, restaurantKey])
   const selectedId = selected?.id ?? null
-  const visibleRestaurants = selected && !filtered.some(({ id }) => id === selected.id)
+  const visibleRestaurants = useMemo(() => selected && !filtered.some(({ id }) => id === selected.id)
     ? [...filtered, selected]
-    : filtered
+    : filtered, [filtered, selected])
+  const sortedRestaurants = useMemo(() => {
+    return [...visibleRestaurants].sort((a, b) => {
+      if (sortBy === 'score-desc') return b.profile.score - a.profile.score || a.name.localeCompare(b.name)
+      if (sortBy === 'score-asc') return a.profile.score - b.profile.score || a.name.localeCompare(b.name)
+      if (sortBy === 'inspection-desc') return new Date(b.inspections[0].date).getTime() - new Date(a.inspections[0].date).getTime() || a.name.localeCompare(b.name)
+      return a.name.localeCompare(b.name)
+    })
+  }, [visibleRestaurants, sortBy])
   const scoreColor = (score: number) => score >= 90 ? '#18724b' : score >= 70 ? '#d28524' : '#b54735'
   const minimumProgress = (scoreMinimum - 50) * 2
   const maximumProgress = (scoreMaximum - 50) * 2
@@ -80,8 +91,16 @@ export function ExplorePage() {
             </div>
           </div>
         </div>
-        <div className="results-heading"><strong>{visibleRestaurants.length} places</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
-        <RestaurantList restaurants={visibleRestaurants} selectedId={selectedId} onSelect={selectRestaurant} />
+        <div className="results-heading">
+          <div><strong>{visibleRestaurants.length} places</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
+          <select className="sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value as RestaurantSort)} aria-label="Sort restaurants">
+            <option value="score-desc">Highest score</option>
+            <option value="score-asc">Lowest score</option>
+            <option value="inspection-desc">Newest inspection</option>
+            <option value="name-asc">Name A–Z</option>
+          </select>
+        </div>
+        <RestaurantList restaurants={sortedRestaurants} selectedId={selectedId} onSelect={selectRestaurant} />
         <footer>
           <details>
             <summary>About scores &amp; data</summary>

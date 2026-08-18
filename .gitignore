@@ -3,3 +3,9 @@ dist
 .DS_Store
 *.local
 *.log
+
+# Local Netlify folder
+.netlify
+
+# Local Supabase project link metadata
+supabase/.temp

@@ -3,6 +3,7 @@ import { supabaseRequest } from './_shared/supabase.mts'
 
 interface RestaurantCandidate {
   id: string
+  route_number: number
   name: string
   address: string
   latitude: number | null
@@ -17,12 +18,16 @@ export default async (request: Request) => {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY
   if (!apiKey) return Response.json({ error: 'GOOGLE_PLACES_API_KEY is required' }, { status: 503 })
 
-  const requestedLimit = Number(new URL(request.url).searchParams.get('limit') ?? 50)
+  const requestUrl = new URL(request.url)
+  const requestedLimit = Number(requestUrl.searchParams.get('limit') ?? 50)
   const limit = Math.max(1, Math.min(100, Number.isFinite(requestedLimit) ? requestedLimit : 50))
-  const response = await supabaseRequest(`restaurants?select=id,name,address,latitude,longitude&or=(latitude.is.null,longitude.is.null)&limit=${limit}`)
+  const requestedAfter = Number(requestUrl.searchParams.get('after') ?? 0)
+  const after = Math.max(0, Number.isFinite(requestedAfter) ? requestedAfter : 0)
+  const response = await supabaseRequest(`restaurants?select=id,route_number,name,address,latitude,longitude&or=(latitude.is.null,longitude.is.null)&route_number=gt.${after}&order=route_number.asc&limit=${limit}`)
   const candidates = await response.json() as RestaurantCandidate[]
   let matched = 0
   let reviewRequired = 0
+  const decisions: Array<{ routeNumber: number; restaurant: string; confidence: number | null; matched: boolean }> = []
 
   for (const candidate of candidates) {
     const match = await findGooglePlaceMatch({ name: candidate.name, address: candidate.address }, apiKey)
@@ -31,6 +36,7 @@ export default async (request: Request) => {
     const longitude = place?.location?.longitude
     if (!match || !place || match.requiresReview || latitude == null || longitude == null) {
       reviewRequired += 1
+      decisions.push({ routeNumber: candidate.route_number, restaurant: candidate.name, confidence: match?.confidence ?? null, matched: false })
       continue
     }
     await supabaseRequest(`restaurants?id=eq.${candidate.id}`, {
@@ -54,9 +60,12 @@ export default async (request: Request) => {
       }),
     })
     matched += 1
+    decisions.push({ routeNumber: candidate.route_number, restaurant: candidate.name, confidence: match.confidence, matched: true })
   }
 
-  return Response.json({ attempted: candidates.length, matched, reviewRequired })
+  const lastRouteNumber = candidates.at(-1)?.route_number ?? after
+  console.log(JSON.stringify({ attempted: candidates.length, matched, reviewRequired, after, lastRouteNumber, decisions }))
+  return Response.json({ attempted: candidates.length, matched, reviewRequired, after, lastRouteNumber })
 }
 
 export const config = { path: '/api/enrich-google-places' }

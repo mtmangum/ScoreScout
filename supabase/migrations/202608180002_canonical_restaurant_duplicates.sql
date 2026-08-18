@@ -58,9 +58,19 @@ create or replace view public.restaurant_canonical_members with (security_invoke
 select
   r.id as restaurant_id,
   r.facility_id,
-  coalesce(rule.canonical_facility_id, r.facility_id) as canonical_facility_id
+  r.facility_id as canonical_facility_id
 from public.restaurants r
-left join public.restaurant_duplicate_rules rule
+where not exists (
+  select 1 from public.restaurant_duplicate_rules rule
+  where rule.duplicate_facility_id = r.facility_id
+)
+union all
+select
+  r.id as restaurant_id,
+  r.facility_id,
+  rule.canonical_facility_id
+from public.restaurants r
+join public.restaurant_duplicate_rules rule
   on rule.duplicate_facility_id = r.facility_id;
 
 grant select on public.restaurant_canonical_members to anon, authenticated;
@@ -200,9 +210,18 @@ as $$
 declare
   v_duplicate_restaurant_id uuid;
 begin
-  if tg_op in ('UPDATE', 'DELETE') then
+  if tg_op = 'DELETE' then
     perform public.refresh_canonical_restaurant_profile(old.canonical_facility_id);
     perform public.refresh_canonical_restaurant_profile(old.duplicate_facility_id);
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if old.canonical_facility_id <> new.canonical_facility_id then
+      perform public.refresh_canonical_restaurant_profile(old.canonical_facility_id);
+    end if;
+    if old.duplicate_facility_id <> new.duplicate_facility_id then
+      perform public.refresh_canonical_restaurant_profile(old.duplicate_facility_id);
+    end if;
   end if;
 
   if tg_op in ('INSERT', 'UPDATE') then
@@ -305,14 +324,13 @@ left join lateral (
 ) rating on true
 left join lateral (
   select
-    coalesce(jsonb_agg(member_restaurant.route_number::text order by member_restaurant.route_number)
-      filter (where member_restaurant.id <> r.id), '[]'::jsonb) as route_aliases,
-    coalesce(jsonb_agg(member_restaurant.facility_id order by member_restaurant.route_number)
-      filter (where member_restaurant.id <> r.id), '[]'::jsonb) as facility_aliases,
-    string_agg(member_restaurant.name || ' ' || member_restaurant.address, ' ') as search_text
-  from public.restaurant_canonical_members member
-  join public.restaurants member_restaurant on member_restaurant.id = member.restaurant_id
-  where member.canonical_facility_id = r.facility_id
+    coalesce(jsonb_agg(alias_restaurant.route_number::text order by alias_restaurant.route_number), '[]'::jsonb) as route_aliases,
+    coalesce(jsonb_agg(alias_restaurant.facility_id order by alias_restaurant.route_number), '[]'::jsonb) as facility_aliases,
+    coalesce(string_agg(alias_restaurant.name || ' ' || alias_restaurant.address, ' '), '') as search_text
+  from public.restaurant_duplicate_rules rule
+  join public.restaurants alias_restaurant
+    on alias_restaurant.facility_id = rule.duplicate_facility_id
+  where rule.canonical_facility_id = r.facility_id
 ) aliases on true
 where r.active
   and not exists (

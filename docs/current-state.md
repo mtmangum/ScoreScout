@@ -31,9 +31,10 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to the ScoreScout 1.0.0 release after the release commit is pushed.
+- `origin/main` includes canonical duplicate handling and the accessibility fixes in `38f1bf7`. A source-only follow-up optimizing canonical membership/search and making the duplicate-rule trigger safely idempotent is committed locally but intentionally not pushed, avoiding a redundant Netlify deploy; batch it with the next production change.
 - The Census geocoding backfill has finished; check current match counts before assuming the historical numbers below are still current.
 - All four migrations through `202608180002_canonical_restaurant_duplicates.sql` **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows them as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
+- The optimized definition currently in the local `202608180002_canonical_restaurant_duplicates.sql` was also applied directly to production after the first live alias-search query exposed a statement timeout. Production search recovered; the optimization avoids broad scans by expressing canonical membership as indexed union branches and looking up alias search terms directly from the rules table.
 - A one-off Census geocoding backfill script (not committed) completed the original ~6,494-restaurant backlog. It duplicated `geocode-census-background.mts`'s logic but ran synchronously from the agent's shell because Netlify's `-background` functions return `202` with an empty body immediately. Do not rerun a broad backfill without first checking current unmatched counts.
 
 Before editing, always run:

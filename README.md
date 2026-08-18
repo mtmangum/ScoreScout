@@ -14,13 +14,13 @@ The frontend uses `/api/restaurants` when the Supabase environment is configured
 
 ## Live data setup
 
-1. Create a Supabase project and run `supabase/migrations/202608170001_initial_schema.sql` in its SQL editor.
+1. Create a Supabase project and run the migrations in `supabase/migrations/` (in order) in its SQL editor.
 2. Add `SUPABASE_URL` and `SUPABASE_SECRET_KEY` in Netlify environment variables. Use a modern `sb_secret_…` key and never expose it in browser code or source control.
 3. Deploy, then run the `import-austin` scheduled function once from Netlify's Functions page.
-4. Add `GOOGLE_PLACES_API_KEY` and a random `IMPORT_SECRET` in Netlify.
-5. Invoke the protected `/api/enrich-google-places?limit=50` background function with `Authorization: Bearer <IMPORT_SECRET>` until the initial location backlog is complete.
+4. Add a random `IMPORT_SECRET` in Netlify, then invoke the protected `/api/geocode-census?limit=100` background function with `Authorization: Bearer <IMPORT_SECRET>`, paging through with `&after=<lastRouteNumber>` until the backlog is geocoded. This is free and requires no API key.
+5. Optionally add `GOOGLE_PLACES_API_KEY` and invoke `/api/enrich-google-places?limit=50` the same way, to attach community ratings. This is independent of map/list coverage — it only adds ratings, not coordinates.
 
-The Google enrichment function only accepts matches at or above the configured confidence threshold. Uncertain matches remain without coordinates for manual review and do not appear on the map.
+The Google enrichment function only accepts matches at or above the configured confidence threshold; uncertain matches are skipped for manual review.
 
 ## Tech stack
 

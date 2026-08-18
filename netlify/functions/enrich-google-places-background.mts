@@ -10,6 +10,10 @@ interface RestaurantCandidate {
   longitude: number | null
 }
 
+// Coordinates are populated separately by /api/geocode-census (free, no
+// coverage/cost limit). Google Places is used only for community ratings,
+// so a restaurant with no coordinates yet can still get a rating.
+
 export default async (request: Request) => {
   const secret = process.env.IMPORT_SECRET
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
@@ -23,27 +27,25 @@ export default async (request: Request) => {
   const limit = Math.max(1, Math.min(100, Number.isFinite(requestedLimit) ? requestedLimit : 50))
   const requestedAfter = Number(requestUrl.searchParams.get('after') ?? 0)
   const after = Math.max(0, Number.isFinite(requestedAfter) ? requestedAfter : 0)
-  const response = await supabaseRequest(`restaurants?select=id,route_number,name,address,latitude,longitude&or=(latitude.is.null,longitude.is.null)&route_number=gt.${after}&order=route_number.asc&limit=${limit}`)
+  const response = await supabaseRequest(`restaurants_needing_rating?route_number=gt.${after}&order=route_number.asc&limit=${limit}`)
   const candidates = await response.json() as RestaurantCandidate[]
   let matched = 0
   let reviewRequired = 0
   const decisions: Array<{ routeNumber: number; restaurant: string; confidence: number | null; matched: boolean }> = []
 
   for (const candidate of candidates) {
-    const match = await findGooglePlaceMatch({ name: candidate.name, address: candidate.address }, apiKey)
+    const match = await findGooglePlaceMatch({
+      name: candidate.name,
+      address: candidate.address,
+      latitude: candidate.latitude ?? undefined,
+      longitude: candidate.longitude ?? undefined,
+    }, apiKey)
     const place = match?.place
-    const latitude = place?.location?.latitude
-    const longitude = place?.location?.longitude
-    if (!match || !place || match.requiresReview || latitude == null || longitude == null) {
+    if (!match || !place || match.requiresReview) {
       reviewRequired += 1
       decisions.push({ routeNumber: candidate.route_number, restaurant: candidate.name, confidence: match?.confidence ?? null, matched: false })
       continue
     }
-    await supabaseRequest(`restaurants?id=eq.${candidate.id}`, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ latitude, longitude }),
-    })
     await supabaseRequest('community_ratings?on_conflict=restaurant_id', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },

@@ -31,8 +31,9 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to commit `ed44dcc` (`Ignore local agent notes (AGENTS.md, PROJECT_STATE.md)`), plus this handoff's own commit adding the Map/Satellite/Hybrid toggle.
+- `main` and `origin/main` point to commit `645f725` (`Add hybrid basemap mode, update handoff doc`), plus this handoff's own commit adding Census geocoding.
 - No known uncommitted work is pending as of this handoff.
+- The new geocoding migration (`202608172200_geocoding_views.sql`) has **not** been applied to the production Supabase project yet, and `/api/geocode-census` has not been run. See "Why production currently shows only a small subset" above for the remaining rollout steps.
 
 Before editing, always run:
 
@@ -128,15 +129,19 @@ The dataset does not contain a reliable establishment-type field. A classificati
 
 ### Why production currently shows only a small subset
 
-`netlify/functions/restaurants.mts` requests rows from `restaurant_explorer` with both `latitude` and `longitude` required and a hard limit of 1,000. The Austin inspection source does not supply coordinates. Coordinates are currently added only when the Google Places enrichment accepts a match, and that same step writes the community rating.
+`netlify/functions/restaurants.mts` requests rows from `restaurant_explorer` with both `latitude` and `longitude` required and a hard limit of 1,000. The Austin inspection source does not supply coordinates. Coordinates were previously added only when the Google Places enrichment accepted a match, so the public API exposed only successfully Google-matched facilities — 17 rows on the last verification, out of roughly 6,500 imported facilities.
 
-Therefore, the public API currently exposes only successfully Google-matched/geocoded facilities. On the last verification it returned 17 rows, and all 17 had Google ratings. This is not the expected final inventory; the underlying import contains about 6,500 facilities.
+**Fix implemented (chosen direction: free geocoder, Google as optional rating-only enrichment):**
 
-The next architecture decision should be one of:
+- `netlify/functions/geocode-census-background.mts` (new) geocodes restaurants via the free, keyless US Census Bureau geocoder (`onelineaddress` endpoint, `Public_AR_Current` benchmark) and writes `latitude`/`longitude` directly. No API key, no cost, no documented hard rate limit; the function paces itself with a 120 ms delay between requests as a courtesy. Reads candidates from the new `restaurants_needing_geocode` view.
+- `netlify/functions/enrich-google-places-background.mts` no longer writes coordinates and no longer gates on missing coordinates. It now reads candidates from the new `restaurants_needing_rating` view (restaurants with no `community_ratings` row yet) and only upserts a Google Places community rating. When coordinates already exist (from Census), they're passed to `findGooglePlaceMatch` for location-bias scoring.
+- New migration: `supabase/migrations/202608172200_geocoding_views.sql` adds `restaurants_needing_geocode` and `restaurants_needing_rating`.
 
-1. Complete/cost-control Google enrichment for the intended inventory.
-2. Add a separate lower-cost geocoding pipeline and treat Google community ratings as optional enrichment.
-3. Split list and map queries so ungeocoded facilities can still be searched/listed.
+**Status: code complete, not yet applied to production.** Still needed:
+1. Apply the migration to `scorescout-production` (`supabase db push` or equivalent).
+2. Deploy (push to `main`).
+3. Run `/api/geocode-census` across the ~6,500-facility backlog (paginated via `limit`/`after`, same pattern as the Google enrichment endpoint) to backfill coordinates.
+4. Google enrichment can then run independently/opportunistically for ratings — still subject to the existing "ask before materially increasing Google Places usage/cost" rule.
 
 Do not simply remove the coordinate filter and pass null coordinates into `MapView`.
 
@@ -163,19 +168,29 @@ File: `netlify/functions/import-austin.mts`
 - Recalculates profiles using algorithm version `v1`.
 - Records successful runs in `data_sources`.
 
+### Census geocoding
+
+File: `netlify/functions/geocode-census-background.mts`
+
+- Protected by `Authorization: Bearer <IMPORT_SECRET>`.
+- Accepts `limit` (default 100, max 200) and an `after` route-number cursor.
+- Selects from the `restaurants_needing_geocode` view (active restaurants with null latitude/longitude).
+- Calls the free US Census Bureau geocoder (no API key); writes `latitude`/`longitude` on a match.
+- No cost and no known hard rate limit; self-paced with a 120 ms delay between requests.
+
 ### Google Places enrichment
 
 File: `netlify/functions/enrich-google-places-background.mts`
 
 - Protected by `Authorization: Bearer <IMPORT_SECRET>`.
 - Accepts `limit` from 1 through 100 and an `after` route-number cursor.
-- Selects restaurants with missing coordinates.
-- Searches Google Places (New), scores name/address/location similarity, and accepts only confidence `>= 0.85`.
-- Accepted matches update coordinates and upsert a Google Places community rating.
-- Rejected/uncertain matches are logged for review and remain without coordinates.
+- Selects from the `restaurants_needing_rating` view (active restaurants with no `community_ratings` row yet) — no longer gated on missing coordinates.
+- Searches Google Places (New), scores name/address/location similarity (using existing coordinates for location bias when available), and accepts only confidence `>= 0.85`.
+- Accepted matches upsert a Google Places community rating only; it no longer writes `latitude`/`longitude` (Census geocoding owns coordinates now).
+- Rejected/uncertain matches are logged for review.
 - Matching code and tests live in `scripts/lib/googlePlaces.ts` and `scripts/lib/googlePlaces.test.ts`.
 
-Recent controlled enrichment used about 120 Google calls and produced 17 accepted matches. Many plausible matches scored around `0.78`; tune matching carefully before scaling. Google Places usage can incur cost. Do not run large enrichment batches or exceed the agreed free allowance without explicit user approval.
+Recent controlled enrichment (pre-decoupling) used about 120 Google calls and produced 17 accepted matches. Many plausible matches scored around `0.78`; tune matching carefully before scaling. Google Places usage can incur cost. Do not run large enrichment batches or exceed the agreed free allowance without explicit user approval.
 
 ## Inspection History Profile v1
 
@@ -194,7 +209,10 @@ Implementation: `src/features/restaurants/score.ts`
 
 ## Supabase schema
 
-Initial migration: `supabase/migrations/202608170001_initial_schema.sql`
+Migrations:
+
+- `supabase/migrations/202608170001_initial_schema.sql`
+- `supabase/migrations/202608172200_geocoding_views.sql`
 
 Main objects:
 
@@ -205,6 +223,7 @@ Main objects:
 - `data_sources`
 - `set_restaurant_location()` trigger function
 - `restaurant_explorer` security-invoker view
+- `restaurants_needing_geocode`, `restaurants_needing_rating` security-invoker views
 
 PostGIS stores restaurant locations as geography points. Public read-only RLS policies exist on the four user-facing tables. Anonymous/authenticated roles receive select access to those tables and `restaurant_explorer`. Server-side writes use the Supabase secret key.
 
@@ -244,7 +263,7 @@ Recent baseline: 2 Vitest files, 10 tests passing.
 
 Highest priority:
 
-1. Production list/map only exposes geocoded Google matches rather than the full imported inventory.
+1. Production list/map only exposes geocoded Google matches rather than the full imported inventory. Fix is code-complete (Census geocoding, see above) but not yet applied to production or backfilled.
 2. Thousands of facilities require clustering, viewport queries, or both; rendering every marker is not viable.
 3. The source needs classification so schools, stores, hospitals, and other facilities are not presented indiscriminately as restaurants.
 4. Amber text/markers have insufficient contrast in some contexts and should be darkened.
@@ -264,10 +283,12 @@ Highest priority:
 - Favorites should remain visible while regular results scroll.
 - Google Places matching must favor avoiding false matches over maximizing coverage.
 - Ask before materially increasing Google Places usage/cost.
+- Coordinate coverage comes from a free Census Bureau geocoder, not Google; Google Places is optional rating-only enrichment decoupled from map/list coverage.
 
 ## Recent commits
 
 ```text
+645f725 Add hybrid basemap mode, update handoff doc
 ed44dcc Ignore local agent notes (AGENTS.md, PROJECT_STATE.md)
 e1e99c3 Add satellite basemap toggle to the map
 e546366 Keep saved restaurants visible while scrolling

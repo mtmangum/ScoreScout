@@ -69,7 +69,7 @@ export function ExplorePage() {
     <main className="app-shell">
       <section className="sidebar">
         <header className="brand"><img className="brand-mark" src={scoreScoutLogo} alt="" /><div><strong>ScoreScout</strong><small>Austin inspection explorer</small></div></header>
-        <div className="intro"><p className="eyebrow">Explore Austin</p><h1>Restaurant inspection history, in context.</h1><p>Official scores, recent patterns, and clear explanations—all in one place.</p></div>
+        <div className="intro"><p className="eyebrow">Explore Austin restaurants</p><h1>Inspection history, in context.</h1></div>
         <div className="filters">
           <label className="search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or address" /></label>
           <div className="score-filter">
@@ -81,7 +81,7 @@ export function ExplorePage() {
             </div>
           </div>
         </div>
-        <div className="results-heading"><strong>{visibleRestaurants.length} places</strong><span>{loading ? 'Loading…' : source === 'live' ? 'Live Austin data' : 'Fixture preview'}</span></div>
+        <div className="results-heading"><strong>{visibleRestaurants.length} places</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
         <RestaurantList restaurants={visibleRestaurants} selectedId={selectedId} onSelect={selectRestaurant} />
         <footer>
           <details>
@@ -89,7 +89,7 @@ export function ExplorePage() {
             <p>Inspection results are snapshots of conditions observed by Austin Public Health. The profile summarizes available history and is not an independent food-safety determination.</p>
             <p>Community ratings reflect customer sentiment and are separate from official inspections. Preview ratings are fixture data until Google Places is connected.</p>
           </details>
-          <span>{source === 'live' ? 'Data source: City of Austin' : 'Data source: fixture preview · Scores are not live yet'}</span>
+          <span>{source === 'live' ? 'Data source: City of Austin' : 'Live data unavailable · Sample restaurants shown'}</span>
         </footer>
       </section>
       <section className="map-region"><MapView restaurants={visibleRestaurants} selectedId={selectedId} onSelect={selectRestaurant} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>

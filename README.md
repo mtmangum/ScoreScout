@@ -13,6 +13,7 @@ Routine inspections are point-in-time snapshots. ScoreScout summarizes available
 ## Tech stack
 
 - React + Vite + TypeScript
+- React Router for shareable restaurant deep links
 - Leaflet / React-Leaflet for the map
 - Vitest for unit tests (scoring logic)
 
@@ -44,6 +45,10 @@ scripts/            data import / profile calculation jobs
 ```
 
 See [austin-score-scout-implementation.md](austin-score-scout-implementation.md) for the full implementation handoff, including the scoring contract, database model, and build sequence.
+
+## Deployment
+
+`vercel.json` rewrites all paths to `index.html` so client-side routes (including deep links to a restaurant) resolve correctly on a direct load or refresh.
 
 ## Status
 

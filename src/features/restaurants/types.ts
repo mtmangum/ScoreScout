@@ -28,6 +28,8 @@ export interface CommunityRating {
 
 export interface Restaurant {
   id: string
+  cityCode: string
+  routeId: string
   facilityId: string
   name: string
   address: string

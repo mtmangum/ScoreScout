@@ -78,8 +78,6 @@ export function RestaurantDetail({ restaurant, onClose }: RestaurantDetailProps)
         <h3>How this was calculated</h3>
         <p>Recent inspections carry more weight. This location's recent pattern is {trendWord}; score variation adjusted the profile by {profile.consistencyAdjustment.toFixed(1)} points and the recent trend by {profile.trendAdjustment >= 0 ? '+' : ''}{profile.trendAdjustment.toFixed(1)}.</p>
       </section>
-      <p className="disclaimer">Inspection results are snapshots of conditions observed by Austin Public Health. This profile summarizes available history and is not an independent food-safety determination.</p>
-      <p className="disclaimer">Community ratings summarize customer sentiment and are separate from official inspection results. Preview ratings are fixture data until Google Places enrichment is configured.</p>
       <a className="source-link" href="https://data.austintexas.gov/Health-and-Community-Services/Food-Establishment-Inspection-Scores/ecmv-9xxi" target="_blank" rel="noreferrer">View official source ↗</a>
     </aside>
   )

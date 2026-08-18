@@ -12,18 +12,28 @@ interface MapViewProps {
 
 const defaultCenter: [number, number] = [30.2747, -97.7404]
 
-type Basemap = 'street' | 'satellite'
+type Basemap = 'street' | 'satellite' | 'hybrid'
 
-const basemaps: Record<Basemap, { url: string; attribution: string }> = {
-  street: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap contributors',
-  },
-  satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
-  },
+const streetTiles = {
+  url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  attribution: '&copy; OpenStreetMap contributors',
 }
+
+const imageryTiles = {
+  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+}
+
+const labelsOverlay = {
+  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  attribution: 'Labels &copy; Esri',
+}
+
+const basemapOptions: Array<{ value: Basemap; label: string }> = [
+  { value: 'street', label: 'Map' },
+  { value: 'satellite', label: 'Satellite' },
+  { value: 'hybrid', label: 'Hybrid' },
+]
 
 function scorePin(score: number, selected: boolean) {
   const size = selected ? 56 : 48
@@ -57,10 +67,14 @@ function SelectionPan({ restaurant, selectedId }: { restaurant?: Restaurant; sel
 export function MapView({ restaurants, selectedId, onSelect }: MapViewProps) {
   const selectedRestaurant = restaurants.find(({ id }) => id === selectedId)
   const [basemap, setBasemap] = useState<Basemap>('street')
+  const base = basemap === 'street' ? streetTiles : imageryTiles
   return (
     <>
       <MapContainer center={defaultCenter} zoom={12} className={`map ${basemap}`} zoomControl={false}>
-        <TileLayer key={basemap} attribution={basemaps[basemap].attribution} url={basemaps[basemap].url} />
+        <TileLayer key={basemap === 'street' ? 'street' : 'imagery'} attribution={base.attribution} url={base.url} />
+        {basemap === 'hybrid' && (
+          <TileLayer key="labels" attribution={labelsOverlay.attribution} url={labelsOverlay.url} zIndex={2} />
+        )}
         <SelectionPan restaurant={selectedRestaurant} selectedId={selectedId} />
         {restaurants.map((restaurant) => {
           const selected = restaurant.id === selectedId
@@ -75,13 +89,18 @@ export function MapView({ restaurants, selectedId, onSelect }: MapViewProps) {
           )
         })}
       </MapContainer>
-      <button
-        type="button"
-        className="basemap-toggle"
-        onClick={() => setBasemap((current) => (current === 'street' ? 'satellite' : 'street'))}
-      >
-        {basemap === 'street' ? 'Satellite' : 'Map'}
-      </button>
+      <div className="basemap-toggle" role="group" aria-label="Map style">
+        {basemapOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={option.value === basemap ? 'active' : undefined}
+            onClick={() => setBasemap(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </>
   )
 }

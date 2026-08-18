@@ -1,6 +1,6 @@
 # ScoreScout — Current State and Agent Handoff
 
-Last updated: 2026-08-17 (America/Chicago)
+Last updated: 2026-08-17 (America/Chicago), Claude session
 
 This document is the current operational handoff for ScoreScout. Read it before changing the product, data pipeline, Supabase schema, or Netlify configuration. Update it whenever behavior, infrastructure, or known constraints materially change.
 
@@ -31,11 +31,8 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to commit `e1e99c3` (`Add satellite basemap toggle to the map`).
-- There are intentional, uncommitted edits in:
-  - `src/components/MapView.tsx`
-  - `src/styles/index.css`
-- Those edits expand the committed Map/Satellite toggle into Map/Satellite/Hybrid controls. Preserve them unless the user explicitly asks to discard or replace them.
+- `main` and `origin/main` point to commit `ed44dcc` (`Ignore local agent notes (AGENTS.md, PROJECT_STATE.md)`), plus this handoff's own commit adding the Map/Satellite/Hybrid toggle.
+- No known uncommitted work is pending as of this handoff.
 
 Before editing, always run:
 
@@ -90,8 +87,7 @@ Alphabetical name order breaks score/date ties.
 - Score markers use green for 90–100, amber for 70–89, and red below 70.
 - Selecting a marker opens the detail route/panel and enlarges the marker.
 - Desktop selection pans the map to compensate for the right-side detail panel.
-- Committed production behavior includes Map and Esri Satellite basemaps.
-- Current uncommitted work adds an Esri Hybrid mode with boundary/place labels.
+- Basemap control is a three-way Map/Satellite/Hybrid switcher (top-right of the map). Satellite and Hybrid use Esri World Imagery; Hybrid layers Esri's boundary/place-labels reference tiles on top.
 - Zoom controls are currently disabled.
 - Marker clustering and viewport-based loading are not implemented.
 
@@ -272,6 +268,7 @@ Highest priority:
 ## Recent commits
 
 ```text
+ed44dcc Ignore local agent notes (AGENTS.md, PROJECT_STATE.md)
 e1e99c3 Add satellite basemap toggle to the map
 e546366 Keep saved restaurants visible while scrolling
 84bbe3b Pin saved restaurants to top

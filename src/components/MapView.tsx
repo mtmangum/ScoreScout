@@ -23,7 +23,7 @@ interface ClusterAggregateProps {
 type RestaurantCluster = Supercluster<RestaurantPointProps, ClusterAggregateProps>
 
 const defaultCenter: [number, number] = [30.2747, -97.7404]
-const clusterRadius = 60
+const clusterRadius = 100
 const clusterMaxZoom = 16
 
 const streetTiles = {

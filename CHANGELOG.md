@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Tightened the sidebar introduction copy, then removed it to maximize result-list space.
 - Shrunk map pins and cluster bubbles so they take up less of the map.
 - Restaurant list now defaults to newest inspection first (was highest score first).
+- Increased the map clustering radius (tuned against real production data) so the default view groups nearby restaurants more aggressively, cutting on-screen markers from 233 to 140 at the default zoom.
 
 ### Fixed
 

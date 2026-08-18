@@ -120,7 +120,7 @@ export function ExplorePage() {
         </footer>
       </section>
       <section className="map-region"><MapView restaurants={visibleRestaurants} selectedId={selectedId} onSelect={selectRestaurant} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
-      {selected && <RestaurantDetail restaurant={selected} favorite={favoriteIds.has(selected.id)} onToggleFavorite={() => toggleFavorite(selected.id)} onClose={() => navigate('/')} />}
+      {selected && <RestaurantDetail restaurant={selected} onClose={() => navigate('/')} />}
     </main>
   )
 }

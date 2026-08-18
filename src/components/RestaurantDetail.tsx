@@ -1,11 +1,11 @@
 import type { Restaurant } from '../features/restaurants/types'
 import { ScoreBadge } from './ScoreBadge'
 
-interface RestaurantDetailProps { restaurant: Restaurant; favorite: boolean; onToggleFavorite: () => void; onClose: () => void }
+interface RestaurantDetailProps { restaurant: Restaurant; onClose: () => void }
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 
-export function RestaurantDetail({ restaurant, favorite, onToggleFavorite, onClose }: RestaurantDetailProps) {
+export function RestaurantDetail({ restaurant, onClose }: RestaurantDetailProps) {
   const latest = restaurant.inspections[0]
   const profile = restaurant.profile
   const trendWord = profile.trendAdjustment > 0.2 ? 'improving' : profile.trendAdjustment < -0.2 ? 'declining' : 'steady'
@@ -29,7 +29,6 @@ export function RestaurantDetail({ restaurant, favorite, onToggleFavorite, onClo
       <p className="eyebrow">Inspection history</p>
       <h2>{restaurant.name}</h2>
       <p className="address">{restaurant.address}</p>
-      <button className={`detail-favorite ${favorite ? 'active' : ''}`} type="button" onClick={onToggleFavorite} aria-pressed={favorite}><span aria-hidden="true">{favorite ? '★' : '☆'}</span> {favorite ? 'Saved' : 'Save restaurant'}</button>
 
       <div className="profile-hero">
         <ScoreBadge score={profile.score} size="large" />

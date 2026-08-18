@@ -69,7 +69,6 @@ export function ExplorePage() {
     <main className="app-shell">
       <section className="sidebar">
         <header className="brand"><img className="brand-mark" src={scoreScoutLogo} alt="" /><div><strong>ScoreScout</strong><small>Austin inspection explorer</small></div></header>
-        <div className="intro"><p className="eyebrow">Explore Austin restaurants</p><h1>Inspection history, in context.</h1></div>
         <div className="filters">
           <label className="search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or address" /></label>
           <div className="score-filter">

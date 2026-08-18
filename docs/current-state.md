@@ -31,9 +31,9 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `origin/main` includes canonical duplicate handling and the accessibility fixes in `38f1bf7`. The local branch also contains unpublished canonical-query optimization plus the facility-classification/filter work described below. It has intentionally not been pushed, avoiding another billable Netlify deploy; batch it with the next production release.
+- `origin/main` includes canonical duplicate handling, canonical-query optimization, accessibility fixes, and the facility-classification/filter release described below.
 - The Census geocoding backfill has finished; check current match counts before assuming the historical numbers below are still current.
-- All four migrations through `202608180002_canonical_restaurant_duplicates.sql` **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows them as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
+- All five migrations through `202608180003_facility_classification.sql` **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows them as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
 - The optimized definition currently in the local `202608180002_canonical_restaurant_duplicates.sql` was also applied directly to production after the first live alias-search query exposed a statement timeout. Production search recovered; the optimization avoids broad scans by expressing canonical membership as indexed union branches and looking up alias search terms directly from the rules table.
 - A one-off Census geocoding backfill script (not committed) completed the original ~6,494-restaurant backlog. It duplicated `geocode-census-background.mts`'s logic but ran synchronously from the agent's shell because Netlify's `-background` functions return `202` with an empty body immediately. Do not rerun a broad backfill without first checking current unmatched counts.
 
@@ -170,9 +170,9 @@ Last checked on 2026-08-17:
 - Official API: 6,518 distinct facilities and 20,964 inspection rows.
 - Most recent completed ScoreScout import: 6,511 facilities and 20,911 inspection rows.
 
-The dataset does not contain a reliable establishment-type field. Local, not-yet-deployed migration `202608180003_facility_classification.sql` adds conservative name-based classification. A read-only production audit found 272 school and 55 healthcare canonical facilities (327 total), leaving 6,183 as `other`. The word-boundary healthcare rule deliberately avoids false matches such as “Hospitality.” Grocery stores and other ambiguous facility types remain visible until similarly high-confidence rules or manual review exist.
+The dataset does not contain a reliable establishment-type field. Migration `202608180003_facility_classification.sql` adds conservative name-based classification. Production contains 272 school and 55 healthcare canonical facilities (327 total), leaving 6,183 as `other`, verified after applying the migration on 2026-08-18. The word-boundary healthcare rule deliberately avoids false matches such as “Hospitality.” Grocery stores and other ambiguous facility types remain visible until similarly high-confidence rules or manual review exist.
 
-Classification stores `facility_category`, confidence, method, and a manual-lock flag on `restaurants`. Daily imports apply the shared `rules-v1` classifier; a trigger protects manually locked classifications from subsequent rules-based imports. The UI/API change and migration are local only and must be deployed together, with the migration applied before the new function begins querying `restaurant_explorer_classified`.
+Classification stores `facility_category`, confidence, method, and a manual-lock flag on `restaurants`. Daily imports apply the shared `rules-v1` classifier; a trigger protects manually locked classifications from subsequent rules-based imports. The API defaults to the classified explorer view while the disclosure checkbox opts into every inspected facility.
 
 ### Coordinate coverage history
 
@@ -194,7 +194,7 @@ Do not simply remove the coordinate filter and pass null coordinates into `MapVi
 
 File: `netlify/functions/restaurants.mts`
 
-- Local pending version reads `restaurant_explorer_classified`; production continues to read `restaurant_explorer` until the classification release is deployed.
+- Reads `restaurant_explorer_classified`.
 - Requires non-null latitude and longitude.
 - Limits the unscoped query to 1,000 rows and search to 5,000 rows.
 - Defaults to `facility_category=other`; `includeAll=true` removes that category constraint.
@@ -260,7 +260,7 @@ Migrations:
 - `supabase/migrations/202608172200_geocoding_views.sql`
 - `supabase/migrations/202608180001_fix_route_id_truncation.sql` — see "Fixed incidents worth knowing about" above
 - `supabase/migrations/202608180002_canonical_restaurant_duplicates.sql` — reviewed canonical grouping and the Titaya seed rule; applied to production 2026-08-18
-- `supabase/migrations/202608180003_facility_classification.sql` — local only, not applied to production; category metadata, lock-preserving trigger, conservative backfill, and classified explorer view
+- `supabase/migrations/202608180003_facility_classification.sql` — applied to production 2026-08-18; category metadata, lock-preserving trigger, conservative backfill, and classified explorer view
 
 Main objects:
 
@@ -271,7 +271,7 @@ Main objects:
 - `data_sources`
 - `set_restaurant_location()` trigger function
 - `restaurant_explorer` security-invoker view
-- `restaurant_explorer_classified` security-invoker view (pending migration)
+- `restaurant_explorer_classified` security-invoker view
 - `restaurants_needing_geocode`, `restaurants_needing_rating` security-invoker views
 - `restaurant_duplicate_rules`
 - `restaurant_canonical_members` security-invoker view
@@ -321,7 +321,7 @@ The test suite includes scoring, URL resolution (including canonical aliases), G
 Highest priority:
 
 1. Marker clustering is implemented (see Map section above) and solves rendering thousands of markers at once. Viewport-based *data loading* is still not implemented — `/api/restaurants` still returns up to 1,000 rows regardless of what's visible, which interacts with known issue #4 below.
-2. Conservative classification is implemented locally for high-confidence school and healthcare names but is not deployed. Grocery stores, convenience stores, and other ambiguous establishment types remain `other`; expand only with audited, low-false-positive rules or manual review.
+2. Conservative classification covers high-confidence school and healthcare names. Grocery stores, convenience stores, and other ambiguous establishment types remain `other`; expand only with audited, low-false-positive rules or manual review.
 3. Favorites are browser-local only; account-backed synchronization would require authentication and a user-favorites table.
 4. The API hard limit is 1,000 and there is no pagination or viewport query.
 5. The README and older implementation handoff contain some early-stack recommendations that no longer reflect the deployed Netlify/Supabase implementation; use this document as the current source of truth.

@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- Optimized canonical duplicate membership and alias search queries to avoid production statement timeouts, and made the duplicate-rule trigger safely idempotent.
 - Improved amber contrast by separating amber backgrounds from theme-aware amber text colors.
 - Added consistent keyboard focus indicators, including a visible focus treatment around search.
 - Made the restaurant detail panel an accessible non-modal dialog with initial focus, Escape-to-close behavior, and focus restoration while keeping page controls available.

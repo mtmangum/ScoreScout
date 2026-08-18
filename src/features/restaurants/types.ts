@@ -31,6 +31,8 @@ export interface Restaurant {
   cityCode: string
   routeId: string
   facilityId: string
+  routeAliases?: string[]
+  facilityAliases?: string[]
   name: string
   address: string
   latitude: number

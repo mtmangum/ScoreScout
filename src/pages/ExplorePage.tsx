@@ -77,7 +77,7 @@ export function ExplorePage() {
       return a.name.localeCompare(b.name)
     })
   }, [visibleRestaurants, sortBy, favoriteIds])
-  const scoreColor = (score: number) => score >= 90 ? '#18724b' : score >= 70 ? '#d28524' : '#b54735'
+  const scoreColor = (score: number) => score >= 90 ? 'var(--green)' : score >= 70 ? 'var(--amber)' : 'var(--red)'
   const minimumProgress = (scoreMinimum - 50) * 2
   const maximumProgress = (scoreMaximum - 50) * 2
   const selectRestaurant = (id: string) => {
@@ -97,7 +97,7 @@ export function ExplorePage() {
       <div className="mobile-toolbar">
         <label className="search">
           <span>⌕</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or address" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or address" aria-label="Search restaurants by name or address" />
           {query && <button type="button" className="search-clear" onClick={() => setQuery('')} aria-label="Clear search">×</button>}
         </label>
         <div className="mobile-view-toggle" role="group" aria-label="Map or list view">
@@ -116,7 +116,7 @@ export function ExplorePage() {
         <div className="filters">
           <label className="search">
             <span>⌕</span>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or address" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or address" aria-label="Search restaurants by name or address" />
             {query && <button type="button" className="search-clear" onClick={() => setQuery('')} aria-label="Clear search">×</button>}
           </label>
           <div className="score-filter">

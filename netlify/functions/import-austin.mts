@@ -1,4 +1,5 @@
 import { calculateProfile } from '../../src/features/restaurants/score.ts'
+import { groupCanonicalInspectionScores } from '../../scripts/lib/canonicalRestaurants.ts'
 import { supabaseRequest } from './_shared/supabase.mts'
 
 const sourceUrl = 'https://data.austintexas.gov/resource/ecmv-9xxi.json'
@@ -14,6 +15,7 @@ interface AustinRow {
 }
 
 interface StoredRestaurant { id: string; facility_id: string }
+interface StoredDuplicateRule { duplicate_facility_id: string; canonical_facility_id: string }
 
 async function fetchAustinRows() {
   const allRows: AustinRow[] = []
@@ -66,14 +68,25 @@ export default async () => {
       })
     }
 
-    const rowsByFacility = new Map<string, AustinRow[]>()
-    for (const row of rows) rowsByFacility.set(row.facility_id, [...(rowsByFacility.get(row.facility_id) ?? []), row])
-    const profiles = [...rowsByFacility].map(([facilityId, history]) => {
-      const profile = calculateProfile(history.map((row) => Number(row.score)))
+    const duplicateRulesResponse = await supabaseRequest('restaurant_duplicate_rules?select=duplicate_facility_id,canonical_facility_id')
+    const duplicateRules = await duplicateRulesResponse.json() as StoredDuplicateRule[]
+    const canonicalScores = groupCanonicalInspectionScores(
+      rows.map((row) => ({
+        facilityId: row.facility_id,
+        inspectionDate: row.inspection_date.slice(0, 10),
+        score: Number(row.score),
+      })),
+      duplicateRules.map((rule) => ({
+        duplicateFacilityId: rule.duplicate_facility_id,
+        canonicalFacilityId: rule.canonical_facility_id,
+      })),
+    )
+    const profiles = [...canonicalScores].map(([facilityId, scores]) => {
+      const profile = calculateProfile(scores)
       return {
         restaurant_id: restaurantIds.get(facilityId), profile_score: profile.score, confidence: profile.confidence,
         weighted_history_score: profile.weightedHistoryScore, consistency_adjustment: profile.consistencyAdjustment,
-        trend_adjustment: profile.trendAdjustment, inspection_count: history.length,
+        trend_adjustment: profile.trendAdjustment, inspection_count: scores.length,
         calculated_at: startedAt, algorithm_version: 'v1',
       }
     })

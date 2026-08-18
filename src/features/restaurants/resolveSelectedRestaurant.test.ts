@@ -40,6 +40,17 @@ describe('resolveSelectedRestaurant', () => {
     expect(resolveSelectedRestaurant(restaurants, { restaurantKey: 'juniper-table-AUS-1001' })).toBe(target)
   })
 
+  it('resolves reviewed duplicate route and facility aliases to the canonical restaurant', () => {
+    const target = makeRestaurant({
+      id: 'current', facilityId: '178308', routeId: '208',
+      facilityAliases: ['2803076'], routeAliases: ['5550'],
+    })
+
+    expect(resolveSelectedRestaurant([target], { facilityId: '2803076' })).toBe(target)
+    expect(resolveSelectedRestaurant([target], { cityCode: 'AUS', restaurantKey: 'oob-titaya-5550' })).toBe(target)
+    expect(resolveSelectedRestaurant([target], { restaurantKey: 'oob-titaya-2803076' })).toBe(target)
+  })
+
   it('is case-insensitive for the legacy facilityId-suffix match', () => {
     const target = makeRestaurant({ id: '1', facilityId: 'AUS-1001', routeId: '1' })
     const restaurants = [target]

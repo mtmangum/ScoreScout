@@ -17,21 +17,28 @@ export interface SelectionParams {
 export function resolveSelectedRestaurant(restaurants: Restaurant[], { facilityId, cityCode, restaurantKey }: SelectionParams): Restaurant | null {
   const normalizedFacilityId = facilityId?.toUpperCase()
   if (normalizedFacilityId) {
-    const byFacilityId = restaurants.find((restaurant) => restaurant.facilityId === normalizedFacilityId)
+    const byFacilityId = restaurants.find((restaurant) =>
+      [restaurant.facilityId, ...(restaurant.facilityAliases ?? [])]
+        .some((candidate) => candidate.toUpperCase() === normalizedFacilityId),
+    )
     if (byFacilityId) return byFacilityId
   }
   if (cityCode && restaurantKey) {
     const byRoute = restaurants.find((restaurant) =>
-      cityCode.toUpperCase() === restaurant.cityCode && restaurantKey.endsWith(`-${restaurant.routeId}`),
+      cityCode.toUpperCase() === restaurant.cityCode &&
+      [restaurant.routeId, ...(restaurant.routeAliases ?? [])]
+        .some((routeId) => restaurantKey.endsWith(`-${routeId}`)),
     )
     if (byRoute) return byRoute
   }
   if (restaurantKey) {
     const normalizedKey = restaurantKey.toLowerCase()
-    const byLegacyKey = [...restaurants]
-      .sort((a, b) => b.facilityId.length - a.facilityId.length)
-      .find((restaurant) => normalizedKey.endsWith(`-${restaurant.facilityId.toLowerCase()}`))
-    if (byLegacyKey) return byLegacyKey
+    const byLegacyKey = restaurants
+      .flatMap((restaurant) => [restaurant.facilityId, ...(restaurant.facilityAliases ?? [])]
+        .map((candidateFacilityId) => ({ restaurant, candidateFacilityId })))
+      .sort((a, b) => b.candidateFacilityId.length - a.candidateFacilityId.length)
+      .find(({ candidateFacilityId }) => normalizedKey.endsWith(`-${candidateFacilityId.toLowerCase()}`))
+    if (byLegacyKey) return byLegacyKey.restaurant
   }
   return null
 }

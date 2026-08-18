@@ -15,6 +15,7 @@ Routine inspections are point-in-time snapshots. ScoreScout summarizes available
 - Map with score-aware clustering — nearby restaurants group into bubbles colored by the worst score in the group, splitting into individual pins as you zoom in
 - Search by name or address, filter by inspection profile range, sort by score/date/name
 - Shareable per-restaurant links
+- Reviewed duplicate permits consolidate under one canonical establishment while preserving their official source histories and legacy links
 - Save/favorite restaurants, persisted locally and pinned above the scrolling results
 - Light/dark theme, following system preference by default
 - Mobile-first Map/List views with a compact branded header and persistent search

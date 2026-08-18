@@ -5,6 +5,8 @@ interface ExplorerRow {
   facility_id: string
   city_code: string
   route_id: string
+  route_aliases?: string[]
+  facility_aliases?: string[]
   name: string
   address: string
   latitude: number
@@ -36,7 +38,7 @@ export default async (request: Request) => {
     const query = new URLSearchParams({ select: '*', latitude: 'not.is.null', longitude: 'not.is.null', limit: search ? '5000' : '1000' })
     if (search) {
       const escaped = search.replace(/[,%()]/g, '')
-      query.set('or', `(name.ilike.*${escaped}*,address.ilike.*${escaped}*)`)
+      query.set('or', `(name.ilike.*${escaped}*,address.ilike.*${escaped}*,search_text.ilike.*${escaped}*)`)
       query.set('order', 'name.asc')
     }
     const response = await supabaseRequest(`restaurant_explorer?${query}`)
@@ -46,6 +48,8 @@ export default async (request: Request) => {
       facilityId: row.facility_id,
       cityCode: row.city_code,
       routeId: row.route_id,
+      routeAliases: row.route_aliases ?? [],
+      facilityAliases: row.facility_aliases ?? [],
       name: row.name,
       address: row.address,
       latitude: row.latitude,

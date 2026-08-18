@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added reviewed duplicate-facility rules that retain Austin source identities while presenting linked records as one canonical establishment.
+- Seeded the former and current Titaya's Thai Cuisine facility IDs as the first reviewed canonical group.
+- Added canonical-aware inspection profile calculation, community-rating reuse, alias search, and legacy deep-link resolution.
+
+### Fixed
+
+- Improved amber contrast by separating amber backgrounds from theme-aware amber text colors.
+- Added consistent keyboard focus indicators, including a visible focus treatment around search.
+- Made the restaurant detail panel an accessible non-modal dialog with initial focus, Escape-to-close behavior, and focus restoration while keeping page controls available.
+
 ## [1.0.0] - 2026-08-18
 
 ### Added

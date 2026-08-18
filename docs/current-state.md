@@ -32,10 +32,9 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 ## Repository state at this handoff
 
 - `main` and `origin/main` point to the ScoreScout 1.0.0 release after the release commit is pushed.
-- The Census geocoding backfill (see "Why production currently shows only a small subset" above) has finished; check current match counts before assuming the numbers there are still current.
-- No known uncommitted work is pending as of this handoff.
-- All three migrations (`202608170001_initial_schema.sql`, `202608172200_geocoding_views.sql`, `202608180001_fix_route_id_truncation.sql`) **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track any of them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows all as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
-- A one-off Census geocoding backfill script (not committed — it duplicates `geocode-census-background.mts`'s logic but runs synchronously from the agent's shell using the production `SUPABASE_URL`/`SUPABASE_SECRET_KEY` pulled via `netlify env:get`, since Netlify's `-background` functions return `202` with an empty body immediately, making progress untrackable from the HTTP response alone) was started against the ~6,494-restaurant backlog. Check whether it has finished; if still running, do not start a second copy — it would double up on Census requests and race PATCH writes to the same rows.
+- The Census geocoding backfill has finished; check current match counts before assuming the historical numbers below are still current.
+- All four migrations through `202608180002_canonical_restaurant_duplicates.sql` **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows them as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
+- A one-off Census geocoding backfill script (not committed) completed the original ~6,494-restaurant backlog. It duplicated `geocode-census-background.mts`'s logic but ran synchronously from the agent's shell because Netlify's `-background` functions return `202` with an empty body immediately. Do not rerun a broad backfill without first checking current unmatched counts.
 
 Before editing, always run:
 
@@ -96,6 +95,12 @@ Alphabetical name order breaks score/date ties.
 - The brand logo (`assets/scorescout-logo.png`) is a transparent PNG with the pin shape and drop-shadow drawn in near-black — it visually disappeared against the dark background. Fixed with a light backdrop chip, but the first attempt used `background: var(--cream)`, which is silently wrong in dark mode: `--cream` is the page-background token and is itself redefined to a *dark* color (`#121512`) under `[data-theme="dark"]`, so it gave zero contrast. The working fix uses a fixed, non-token light color (`#f5f1e8`) that deliberately does not flip with the theme, since the chip's whole job is to stay light regardless — `:root[data-theme="dark"] .brand-mark { background: #f5f1e8; padding: 3px }`. Any other transparent asset with dark-only artwork will have the same problem in dark mode; when patching one, don't reach for a theme token that's meant to flip.
 - `public/favicon.png` had the identical problem (same source artwork, transparent background, dark-only pin) — likely invisible in a dark-themed browser tab bar. Regenerated `favicon.png`, `favicon.ico`, and `apple-touch-icon.png` (`public/`) composited onto a solid `#f5f1e8` rounded-square backdrop (script used `sharp` + `png-to-ico`, not committed — regenerate similarly from `src/assets/scorescout-logo.png` if the source art changes). Also fixed a second, unrelated favicon bug while at it: `netlify.toml`'s SPA catch-all rewrite (`/* → /index.html`) was swallowing requests to `/favicon.ico` specifically, since no such file existed — browsers/tools that fall back to that implicit path got back an HTML document (`content-type: text/html`) instead of an icon. Having a real file at `public/favicon.ico` resolves this because Netlify serves an existing static file before falling through to the rewrite.
 
+### Accessibility
+
+- Interactive controls use a consistent `:focus-visible` ring. Search uses `:focus-within` so keyboard focus remains visible even though the input's native outline is removed.
+- Amber backgrounds (`--amber`) and amber text (`--amber-text`) are separate tokens. The background token is dark enough for white score text; the text token changes by theme. Verified contrast ratios for the primary pairs are at least 5.29:1.
+- `RestaurantDetail` is an accessible non-modal dialog: it is named by the restaurant heading, focuses its close button when opened, closes on Escape, and restores focus to the invoking control when closed. The rest of the page deliberately remains interactive so controls such as the theme toggle continue to work while details are open.
+
 ### Map
 
 - Leaflet with React-Leaflet.
@@ -103,7 +108,6 @@ Alphabetical name order breaks score/date ties.
 - Score markers use green for 90–100, amber for 70–89, and red below 70. Individual pins are 34px (42px selected); cluster bubbles are 33/39/45px by size tier. The JS `size` in `scorePin`/`clusterPin` (`MapView.tsx`) and the CSS fixed px in `.map-score-pin`/`.map-score-pin.selected` (`index.css`) are two separate numbers kept in sync by hand — change both together.
 - Selecting a marker opens the detail route/panel and enlarges the marker.
 - Desktop selection pans the map to compensate for the right-side detail panel.
-- Basemap control is a three-way Map/Satellite/Hybrid switcher (top-right of the map). Satellite and Hybrid use Esri World Imagery; Hybrid layers Esri's boundary/place-labels reference tiles on top.
 - Zoom controls are currently disabled.
 - `MapResize` (in `MapView.tsx`) attaches a `ResizeObserver` to the Leaflet container and calls `map.invalidateSize()` on every resize. Leaflet caches its container's pixel size at creation time and never notices later layout changes on its own (sidebar reflow, fonts loading async, breakpoint changes) — without this, tiles could be requested for a stale viewport and only partially load. Verified by comparing Leaflet's own `map.getSize()` against the container's actual `getBoundingClientRect()` after resizing across the mobile breakpoint — stays in sync now.
 - Client-side marker clustering (`supercluster`, MIT-licensed, no React/Leaflet peer-dependency coupling) groups nearby restaurants into circular bubbles colored by the worst (lowest) score inside the cluster, using the same green/amber/red bands as individual pins. Bubbles carry **no count number** — a digit on a colored circle reads as a score, not a count; the circular shape (vs. individual pins' teardrop shape) is the only "this is a group" signal. Clusters split into sub-clusters and eventually individual pins as you zoom in or click a cluster (`getClusterExpansionZoom`); implementation in `src/components/MapView.tsx` (`ClusterMarkers`, `useRestaurantClusterIndex`). `clusterRadius`/`clusterMaxZoom` constants control density/threshold. Selecting a restaurant buried in a cluster uses `map.flyTo()` (not `setView`) so a large zoom jump eases smoothly rather than snapping — a plain `setView` felt disorienting for jumps of several zoom levels.
@@ -125,7 +129,6 @@ Alphabetical name order breaks score/date ties.
 - Shareable routes are supported by `src/App.tsx`, including the canonical `/:cityCode/:restaurantKey` route and legacy formats.
 - The detail panel shows:
   - Restaurant/facility name and address
-  - Save/favorite control
   - Inspection History Profile
   - Latest official inspection score and date
   - Confidence and available inspection count
@@ -133,6 +136,17 @@ Alphabetical name order breaks score/date ties.
   - Recent official score chart
   - Deterministic explanation of the profile calculation
   - Link to the official City of Austin source
+
+### Reviewed duplicate facilities
+
+- Austin `facility_id` values remain immutable source identities. Duplicate records are linked, never deleted or rewritten.
+- `restaurant_duplicate_rules` maps a reviewed duplicate facility ID to a one-level canonical facility ID. Validation prevents chains, cycles, and using a facility as both a duplicate and a canonical parent.
+- The public `restaurant_explorer` view emits only canonical restaurants. It combines inspections across group members, reuses the best available group community rating, and falls back to a member's coordinates when the canonical record has none.
+- Alias facility IDs, route numbers, names, and addresses remain searchable. Legacy deep links for a duplicate resolve to the canonical restaurant.
+- The import job reads the reviewed rules and calculates the canonical profile from the combined newest-first inspection history. Adding, changing, or deleting a rule also refreshes affected profiles from already-stored inspections.
+- Geocoding and Google rating candidate views emit canonical establishments only, preventing duplicate API work.
+- The first reviewed rule links former/OOB Titaya facility `2803076` to current facility `178308`. The public route remains the current route (`208`); old route `5550` and both facility IDs remain aliases.
+- Do not create rules from name or address alone. Review coordinates, normalized identity, date continuity, and whether the permits could represent genuinely different operations.
 
 ### Live-data fallback
 
@@ -155,7 +169,7 @@ Last checked on 2026-08-17:
 
 The dataset does not contain a reliable establishment-type field. A classification step is required before claiming that all imported facilities are restaurants.
 
-### Why production currently shows only a small subset
+### Coordinate coverage history
 
 `netlify/functions/restaurants.mts` requests rows from `restaurant_explorer` with both `latitude` and `longitude` required and a hard limit of 1,000. The Austin inspection source does not supply coordinates. Coordinates were previously added only when the Google Places enrichment accepted a match, so the public API exposed only successfully Google-matched facilities — 17 rows on the last verification, out of roughly 6,500 imported facilities.
 
@@ -165,11 +179,7 @@ The dataset does not contain a reliable establishment-type field. A classificati
 - `netlify/functions/enrich-google-places-background.mts` no longer writes coordinates and no longer gates on missing coordinates. It now reads candidates from the new `restaurants_needing_rating` view (restaurants with no `community_ratings` row yet) and only upserts a Google Places community rating. When coordinates already exist (from Census), they're passed to `findGooglePlaceMatch` for location-bias scoring.
 - New migration: `supabase/migrations/202608172200_geocoding_views.sql` adds `restaurants_needing_geocode` and `restaurants_needing_rating`.
 
-**Status: code complete, not yet applied to production.** Still needed:
-1. Apply the migration to `scorescout-production` (`supabase db push` or equivalent).
-2. Deploy (push to `main`).
-3. Run `/api/geocode-census` across the ~6,500-facility backlog (paginated via `limit`/`after`, same pattern as the Google enrichment endpoint) to backfill coordinates.
-4. Google enrichment can then run independently/opportunistically for ratings — still subject to the existing "ask before materially increasing Google Places usage/cost" rule.
+**Current status:** the migration and application code are deployed, and the initial Census backlog has been processed. Recheck live matched/unmatched counts before planning additional geocoding. Google enrichment can run independently and opportunistically for ratings, subject to the existing "ask before materially increasing Google Places usage/cost" rule.
 
 Do not simply remove the coordinate filter and pass null coordinates into `MapView`.
 
@@ -242,6 +252,7 @@ Migrations:
 - `supabase/migrations/202608170001_initial_schema.sql`
 - `supabase/migrations/202608172200_geocoding_views.sql`
 - `supabase/migrations/202608180001_fix_route_id_truncation.sql` — see "Fixed incidents worth knowing about" above
+- `supabase/migrations/202608180002_canonical_restaurant_duplicates.sql` — reviewed canonical grouping and the Titaya seed rule; applied to production 2026-08-18
 
 Main objects:
 
@@ -253,6 +264,9 @@ Main objects:
 - `set_restaurant_location()` trigger function
 - `restaurant_explorer` security-invoker view
 - `restaurants_needing_geocode`, `restaurants_needing_rating` security-invoker views
+- `restaurant_duplicate_rules`
+- `restaurant_canonical_members` security-invoker view
+- `refresh_canonical_restaurant_profile(text)` profile refresh function
 
 PostGIS stores restaurant locations as geography points. Public read-only RLS policies exist on the four user-facing tables. Anonymous/authenticated roles receive select access to those tables and `restaurant_explorer`. Server-side writes use the Supabase secret key.
 
@@ -286,7 +300,7 @@ npm test
 git diff --check
 ```
 
-Recent baseline: 3 Vitest files, 18 tests passing (added `src/features/restaurants/resolveSelectedRestaurant.test.ts`, extracted from inline logic in `ExplorePage.tsx`).
+The test suite includes scoring, URL resolution (including canonical aliases), Google Places matching, and canonical inspection-history grouping.
 
 ## Fixed incidents worth knowing about
 
@@ -297,16 +311,11 @@ Recent baseline: 3 Vitest files, 18 tests passing (added `src/features/restauran
 
 Highest priority:
 
-1. Production list/map previously only exposed geocoded Google matches. Fix is deployed (Census geocoding); migration applied to production and a backfill of the ~6,494-restaurant backlog is in progress/may have completed — check "Repository state" above for current status before assuming either way.
-2. Marker clustering is implemented (see Map section above) and solves rendering thousands of markers at once. Viewport-based *data loading* is still not implemented — `/api/restaurants` still returns up to 1,000 rows regardless of what's visible, which interacts with known issue #9 below.
-3. The source needs classification so schools, stores, hospitals, and other facilities are not presented indiscriminately as restaurants.
-4. Amber text/markers have insufficient contrast in some contexts and should be darkened.
-5. Search removes the native focus outline without a replacement; consistent `:focus-visible` styling is needed.
-6. The detail panel behaves like a modal but lacks dialog semantics, focus management, Escape handling, and focus restoration.
-7. Mobile hides the ScoreScout brand and needs a better map/list navigation pattern.
-8. Favorites are browser-local only; account-backed synchronization would require authentication and a user-favorites table.
-9. The API hard limit is 1,000 and there is no pagination or viewport query.
-10. The README and older implementation handoff contain some early-stack recommendations that no longer reflect the deployed Netlify/Supabase implementation; use this document as the current source of truth.
+1. Marker clustering is implemented (see Map section above) and solves rendering thousands of markers at once. Viewport-based *data loading* is still not implemented — `/api/restaurants` still returns up to 1,000 rows regardless of what's visible, which interacts with known issue #4 below.
+2. The source needs classification so schools, stores, hospitals, and other facilities are not presented indiscriminately as restaurants.
+3. Favorites are browser-local only; account-backed synchronization would require authentication and a user-favorites table.
+4. The API hard limit is 1,000 and there is no pagination or viewport query.
+5. The README and older implementation handoff contain some early-stack recommendations that no longer reflect the deployed Netlify/Supabase implementation; use this document as the current source of truth.
 
 ## Recent product decisions
 

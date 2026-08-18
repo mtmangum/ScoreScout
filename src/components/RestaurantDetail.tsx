@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef } from 'react'
 import type { Restaurant } from '../features/restaurants/types'
 import { ScoreBadge } from './ScoreBadge'
 
@@ -6,6 +7,9 @@ interface RestaurantDetailProps { restaurant: Restaurant; onClose: () => void }
 const dateFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 
 export function RestaurantDetail({ restaurant, onClose }: RestaurantDetailProps) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const onCloseRef = useRef(onClose)
+  const titleId = useId()
   const latest = restaurant.inspections[0]
   const profile = restaurant.profile
   const trendWord = profile.trendAdjustment > 0.2 ? 'improving' : profile.trendAdjustment < -0.2 ? 'declining' : 'steady'
@@ -23,11 +27,34 @@ export function RestaurantDetail({ restaurant, onClose }: RestaurantDetailProps)
   const communitySourceUrl = restaurant.communityRating?.sourceBusinessId.startsWith('fixture-')
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${restaurant.name}, ${restaurant.address}`)}`
     : restaurant.communityRating?.sourceUrl
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    closeButtonRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCloseRef.current()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      if (previouslyFocused?.isConnected) previouslyFocused.focus()
+    }
+  }, [])
+
   return (
-    <aside className="detail-panel" aria-label={`${restaurant.name} details`}>
-      <button className="close-button" onClick={onClose} aria-label="Close details">×</button>
+    <aside className="detail-panel" role="dialog" aria-labelledby={titleId}>
+      <button ref={closeButtonRef} className="close-button" onClick={onClose} aria-label="Close details">×</button>
       <p className="eyebrow">Inspection history</p>
-      <h2>{restaurant.name}</h2>
+      <h2 id={titleId}>{restaurant.name}</h2>
       <p className="address">{restaurant.address}</p>
 
       <div className="profile-hero">

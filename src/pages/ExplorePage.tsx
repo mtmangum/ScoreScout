@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { MapView } from '../components/MapView'
 import { RestaurantDetail } from '../components/RestaurantDetail'
 import { RestaurantList } from '../components/RestaurantList'
+import { useFavorites } from '../hooks/useFavorites'
 import { useRestaurants } from '../hooks/useRestaurants'
 import scoreScoutLogo from '../assets/scorescout-logo.png'
 
@@ -20,18 +21,21 @@ function slugify(value: string) {
 export function ExplorePage() {
   const navigate = useNavigate()
   const { restaurants, source, loading } = useRestaurants()
+  const { favoriteIds, toggleFavorite } = useFavorites()
   const { facilityId, restaurantKey, cityCode } = useParams<{ facilityId: string; restaurantKey: string; cityCode: string }>()
   const [query, setQuery] = useState('')
   const [scoreMinimum, setScoreMinimum] = useState(50)
   const [scoreMaximum, setScoreMaximum] = useState(100)
   const [sortBy, setSortBy] = useState<RestaurantSort>('score-desc')
+  const [showFavorites, setShowFavorites] = useState(false)
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return restaurants.filter((restaurant) =>
       restaurant.profile.score >= scoreMinimum && restaurant.profile.score <= scoreMaximum &&
+      (!showFavorites || favoriteIds.has(restaurant.id)) &&
       (!normalized || `${restaurant.name} ${restaurant.address}`.toLowerCase().includes(normalized)),
     )
-  }, [restaurants, query, scoreMinimum, scoreMaximum])
+  }, [restaurants, query, scoreMinimum, scoreMaximum, showFavorites, favoriteIds])
   const selected = useMemo(() => {
     const normalizedFacilityId = facilityId?.toUpperCase()
     if (normalizedFacilityId) {
@@ -92,15 +96,18 @@ export function ExplorePage() {
           </div>
         </div>
         <div className="results-heading">
-          <div><strong>{visibleRestaurants.length} places</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
-          <select className="sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value as RestaurantSort)} aria-label="Sort restaurants">
-            <option value="score-desc">Highest score</option>
-            <option value="score-asc">Lowest score</option>
-            <option value="inspection-desc">Newest inspection</option>
-            <option value="name-asc">Name A–Z</option>
-          </select>
+          <div className="results-meta"><strong>{visibleRestaurants.length} places</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
+          <div className="results-controls">
+            <button className={`saved-filter ${showFavorites ? 'active' : ''}`} type="button" onClick={() => setShowFavorites((current) => !current)} aria-pressed={showFavorites} aria-label={`${showFavorites ? 'Show all restaurants' : 'Show saved restaurants'}; ${favoriteIds.size} saved`}><span aria-hidden="true">★</span> {favoriteIds.size}</button>
+            <select className="sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value as RestaurantSort)} aria-label="Sort restaurants">
+              <option value="score-desc">Highest score</option>
+              <option value="score-asc">Lowest score</option>
+              <option value="inspection-desc">Newest inspection</option>
+              <option value="name-asc">Name A–Z</option>
+            </select>
+          </div>
         </div>
-        <RestaurantList restaurants={sortedRestaurants} selectedId={selectedId} onSelect={selectRestaurant} />
+        <RestaurantList restaurants={sortedRestaurants} selectedId={selectedId} favoriteIds={favoriteIds} onSelect={selectRestaurant} onToggleFavorite={toggleFavorite} />
         <footer>
           <details>
             <summary>About scores &amp; data</summary>
@@ -111,7 +118,7 @@ export function ExplorePage() {
         </footer>
       </section>
       <section className="map-region"><MapView restaurants={visibleRestaurants} selectedId={selectedId} onSelect={selectRestaurant} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
-      {selected && <RestaurantDetail restaurant={selected} onClose={() => navigate('/')} />}
+      {selected && <RestaurantDetail restaurant={selected} favorite={favoriteIds.has(selected.id)} onToggleFavorite={() => toggleFavorite(selected.id)} onClose={() => navigate('/')} />}
     </main>
   )
 }

@@ -37,6 +37,7 @@ export default async () => {
     const rows = (await fetchAustinRows()).filter((row) => row.facility_id && row.restaurant_name && Number(row.score) >= 0 && Number(row.score) <= 100)
     const latestByFacility = new Map<string, AustinRow>()
     for (const row of rows) if (!latestByFacility.has(row.facility_id)) latestByFacility.set(row.facility_id, row)
+    console.log(`Austin import fetched ${rows.length} inspections for ${latestByFacility.size} restaurants`)
 
     const storedRestaurants: StoredRestaurant[] = []
     for (const batch of chunks([...latestByFacility.values()])) {
@@ -84,9 +85,12 @@ export default async () => {
     await supabaseRequest('data_sources', {
       method: 'POST', body: JSON.stringify({ source_name: 'City of Austin Food Establishment Inspection Scores', source_url: sourceUrl, retrieved_at: startedAt, row_count: rows.length, status: 'success' }),
     })
+    console.log(`Austin import completed: ${rows.length} inspections, ${latestByFacility.size} restaurants`)
     return Response.json({ importedRows: rows.length, restaurants: latestByFacility.size, calculatedProfiles: profiles.length })
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Import failed' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Import failed'
+    console.error(`Austin import failed: ${message}`)
+    return Response.json({ error: message }, { status: 500 })
   }
 }
 

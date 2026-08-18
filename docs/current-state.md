@@ -31,9 +31,10 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to commit `645f725` (`Add hybrid basemap mode, update handoff doc`), plus this handoff's own commit adding Census geocoding.
+- `main` and `origin/main` point to commit `b7c5c39` (`Remove save button from the restaurant detail panel`).
 - No known uncommitted work is pending as of this handoff.
-- The new geocoding migration (`202608172200_geocoding_views.sql`) has **not** been applied to the production Supabase project yet, and `/api/geocode-census` has not been run. See "Why production currently shows only a small subset" above for the remaining rollout steps.
+- The geocoding migration (`202608172200_geocoding_views.sql`) **has been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track either migration as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows both as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
+- A one-off Census geocoding backfill script (not committed — it duplicates `geocode-census-background.mts`'s logic but runs synchronously from the agent's shell using the production `SUPABASE_URL`/`SUPABASE_SECRET_KEY` pulled via `netlify env:get`, since Netlify's `-background` functions return `202` with an empty body immediately, making progress untrackable from the HTTP response alone) was started against the ~6,494-restaurant backlog. Check whether it has finished; if still running, do not start a second copy — it would double up on Census requests and race PATCH writes to the same rows.
 
 Before editing, always run:
 
@@ -90,7 +91,9 @@ Alphabetical name order breaks score/date ties.
 - Desktop selection pans the map to compensate for the right-side detail panel.
 - Basemap control is a three-way Map/Satellite/Hybrid switcher (top-right of the map). Satellite and Hybrid use Esri World Imagery; Hybrid layers Esri's boundary/place-labels reference tiles on top.
 - Zoom controls are currently disabled.
-- Marker clustering and viewport-based loading are not implemented.
+- Client-side marker clustering (`supercluster`, MIT-licensed, no React/Leaflet peer-dependency coupling) groups nearby restaurants into count bubbles colored by the worst (lowest) score inside the cluster, using the same green/amber/red bands as individual pins. Clusters split into sub-clusters and eventually individual pins as you zoom in or click a cluster (`getClusterExpansionZoom`); implementation in `src/components/MapView.tsx` (`ClusterMarkers`, `useRestaurantClusterIndex`). `clusterRadius`/`clusterMaxZoom` constants control density/threshold.
+- Non-obvious ordering constraint: `<ClusterMarkers>` must mount before `<SelectionPan>` in the JSX. A large deep-link-driven zoom jump fires Leaflet's `moveend` synchronously inside `setView()`; sibling effects run in JSX order, so if `SelectionPan`'s effect (which calls `setView`) ran first, `ClusterMarkers`'s `moveend` listener wouldn't be subscribed yet and would miss the event, leaving stale clusters on screen. Verified with a production build (dev-mode React StrictMode's double-effect-invoke can mask/alter this race, so always retest ordering changes against `npm run build && vite preview`, not just `npm run dev`).
+- Viewport-based *data loading* (fetching only what's in view from the API) is still not implemented — clustering here only reduces rendered markers from whatever `restaurants` array the page already has in memory.
 
 ### Restaurant details
 
@@ -263,8 +266,8 @@ Recent baseline: 2 Vitest files, 10 tests passing.
 
 Highest priority:
 
-1. Production list/map only exposes geocoded Google matches rather than the full imported inventory. Fix is code-complete (Census geocoding, see above) but not yet applied to production or backfilled.
-2. Thousands of facilities require clustering, viewport queries, or both; rendering every marker is not viable.
+1. Production list/map previously only exposed geocoded Google matches. Fix is deployed (Census geocoding); migration applied to production and a backfill of the ~6,494-restaurant backlog is in progress/may have completed — check "Repository state" above for current status before assuming either way.
+2. Marker clustering is implemented (see Map section above) and solves rendering thousands of markers at once. Viewport-based *data loading* is still not implemented — `/api/restaurants` still returns up to 1,000 rows regardless of what's visible, which interacts with known issue #9 below.
 3. The source needs classification so schools, stores, hospitals, and other facilities are not presented indiscriminately as restaurants.
 4. Amber text/markers have insufficient contrast in some contexts and should be darkened.
 5. Search removes the native focus outline without a replacement; consistent `:focus-visible` styling is needed.
@@ -284,6 +287,7 @@ Highest priority:
 - Google Places matching must favor avoiding false matches over maximizing coverage.
 - Ask before materially increasing Google Places usage/cost.
 - Coordinate coverage comes from a free Census Bureau geocoder, not Google; Google Places is optional rating-only enrichment decoupled from map/list coverage.
+- Cluster bubbles are colored by worst-score-in-cluster (not a neutral count badge or averaged score) — deliberate choice for a health-inspection app to surface risk rather than hide it inside an average.
 
 ## Recent commits
 

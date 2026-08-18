@@ -60,10 +60,11 @@ function scorePin(score: number, selected: boolean) {
 }
 
 function clusterPin(count: number, worstScore: number) {
+  // No count label: a number on a colored circle reads as a score, not a count.
   const size = count >= 100 ? 60 : count >= 25 ? 52 : 44
   return divIcon({
     className: 'cluster-pin-wrapper',
-    html: `<div class="map-cluster-pin ${scoreTone(worstScore)}"><span>${count}</span></div>`,
+    html: `<div class="map-cluster-pin ${scoreTone(worstScore)}"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   })
@@ -114,7 +115,15 @@ function SelectionPan({ restaurant, selectedId, index }: { restaurant?: Restaura
       const targetZoom = expansionZoom ?? map.getZoom()
       const markerPoint = map.project([restaurant.latitude, restaurant.longitude], targetZoom)
       const centerWithPanelOffset = markerPoint.add([205, 0])
-      map.setView(map.unproject(centerWithPanelOffset, targetZoom), targetZoom, { animate: true, duration: 0.45 })
+      const target = map.unproject(centerWithPanelOffset, targetZoom)
+      // flyTo eases through the pan+zoom as one smooth motion; a plain setView snaps
+      // large zoom jumps (e.g. revealing a restaurant buried in a cluster) too abruptly.
+      const zoomDelta = Math.abs(targetZoom - map.getZoom())
+      if (zoomDelta > 0.5) {
+        map.flyTo(target, targetZoom, { duration: Math.min(1.6, 0.6 + zoomDelta * 0.1) })
+      } else {
+        map.panTo(target, { animate: true, duration: 0.45 })
+      }
     } else if (!isMobile && selectedId === null && previousSelectedId.current !== null) {
       map.panTo(defaultCenter, { animate: true, duration: 0.45 })
     }

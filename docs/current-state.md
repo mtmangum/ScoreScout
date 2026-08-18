@@ -33,7 +33,7 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 - `main` and `origin/main` point to commit `f621203` (`Add score-aware marker clustering to the map`).
 - No known uncommitted work is pending as of this handoff.
-- The geocoding migration (`202608172200_geocoding_views.sql`) **has been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track either migration as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows both as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
+- All three migrations (`202608170001_initial_schema.sql`, `202608172200_geocoding_views.sql`, `202608180001_fix_route_id_truncation.sql`) **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track any of them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows all as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
 - A one-off Census geocoding backfill script (not committed — it duplicates `geocode-census-background.mts`'s logic but runs synchronously from the agent's shell using the production `SUPABASE_URL`/`SUPABASE_SECRET_KEY` pulled via `netlify env:get`, since Netlify's `-background` functions return `202` with an empty body immediately, making progress untrackable from the HTTP response alone) was started against the ~6,494-restaurant backlog. Check whether it has finished; if still running, do not start a second copy — it would double up on Census requests and race PATCH writes to the same rows.
 
 Before editing, always run:
@@ -91,7 +91,7 @@ Alphabetical name order breaks score/date ties.
 - Desktop selection pans the map to compensate for the right-side detail panel.
 - Basemap control is a three-way Map/Satellite/Hybrid switcher (top-right of the map). Satellite and Hybrid use Esri World Imagery; Hybrid layers Esri's boundary/place-labels reference tiles on top.
 - Zoom controls are currently disabled.
-- Client-side marker clustering (`supercluster`, MIT-licensed, no React/Leaflet peer-dependency coupling) groups nearby restaurants into count bubbles colored by the worst (lowest) score inside the cluster, using the same green/amber/red bands as individual pins. Clusters split into sub-clusters and eventually individual pins as you zoom in or click a cluster (`getClusterExpansionZoom`); implementation in `src/components/MapView.tsx` (`ClusterMarkers`, `useRestaurantClusterIndex`). `clusterRadius`/`clusterMaxZoom` constants control density/threshold.
+- Client-side marker clustering (`supercluster`, MIT-licensed, no React/Leaflet peer-dependency coupling) groups nearby restaurants into circular bubbles colored by the worst (lowest) score inside the cluster, using the same green/amber/red bands as individual pins. Bubbles carry **no count number** — a digit on a colored circle reads as a score, not a count; the circular shape (vs. individual pins' teardrop shape) is the only "this is a group" signal. Clusters split into sub-clusters and eventually individual pins as you zoom in or click a cluster (`getClusterExpansionZoom`); implementation in `src/components/MapView.tsx` (`ClusterMarkers`, `useRestaurantClusterIndex`). `clusterRadius`/`clusterMaxZoom` constants control density/threshold. Selecting a restaurant buried in a cluster uses `map.flyTo()` (not `setView`) so a large zoom jump eases smoothly rather than snapping — a plain `setView` felt disorienting for jumps of several zoom levels.
 - Non-obvious ordering constraint: `<ClusterMarkers>` must mount before `<SelectionPan>` in the JSX. A large deep-link-driven zoom jump fires Leaflet's `moveend` synchronously inside `setView()`; sibling effects run in JSX order, so if `SelectionPan`'s effect (which calls `setView`) ran first, `ClusterMarkers`'s `moveend` listener wouldn't be subscribed yet and would miss the event, leaving stale clusters on screen. Verified with a production build (dev-mode React StrictMode's double-effect-invoke can mask/alter this race, so always retest ordering changes against `npm run build && vite preview`, not just `npm run dev`).
 - Viewport-based *data loading* (fetching only what's in view from the API) is still not implemented — clustering here only reduces rendered markers from whatever `restaurants` array the page already has in memory.
 
@@ -216,6 +216,7 @@ Migrations:
 
 - `supabase/migrations/202608170001_initial_schema.sql`
 - `supabase/migrations/202608172200_geocoding_views.sql`
+- `supabase/migrations/202608180001_fix_route_id_truncation.sql` — see "Fixed incidents worth knowing about" above
 
 Main objects:
 
@@ -260,7 +261,12 @@ npm test
 git diff --check
 ```
 
-Recent baseline: 2 Vitest files, 10 tests passing.
+Recent baseline: 3 Vitest files, 18 tests passing (added `src/features/restaurants/resolveSelectedRestaurant.test.ts`, extracted from inline logic in `ExplorePage.tsx`).
+
+## Fixed incidents worth knowing about
+
+- **`route_id` truncation → wrong restaurant on click/deep-link (fixed 2026-08-18).** `restaurant_explorer` derived `route_id` via `lpad(route_number::text, 2, '0')`. Postgres's `lpad` *truncates* (from the right) when the input is longer than the target width, not just pads short ones. With route_number now in the thousands, every route_number sharing a leading two-digit prefix (e.g. 180, 181, ..., 189, 1800-1899) collapsed onto the same `route_id`, so clicking a restaurant in the list or opening a deep link frequently opened a different, wrong restaurant. Verified against production: 8/8 sampled list clicks opened the wrong card before the fix. Fixed in `supabase/migrations/202608180001_fix_route_id_truncation.sql` by dropping the padding entirely (`route_number::text`, already unique, no truncation risk at any size) — verified 0 duplicate `route_id` values afterward and 0/8 mismatches on re-test. **Lesson: any lpad/rpad/substring-style formatting applied to an identifier must be re-checked against realistic scale, not just the original small fixture set** — this one was fine at 5 restaurants and silently broke at ~6,500. If similar cosmetic formatting shows up elsewhere (zip codes, ids, slugs), check whether it can truncate, not just whether it looks right today.
+- CDN caching gotcha encountered while verifying the above: `/api/restaurants` has `s-maxage=300`, and different Netlify edge POPs cache independently — after applying the SQL fix, some requests (e.g. `curl` from one network path) saw the fresh response immediately while others (a headless-browser test) kept serving a stale, pre-fix response for several more minutes until that edge's own TTL expired. When verifying a backend fix against `scorescout.org`, check the response's `Age` header before concluding a fix didn't work — a high `Age` means you're looking at a cached pre-fix response, not a live bug.
 
 ## Known UX and technical issues
 

@@ -5,6 +5,7 @@ import { RestaurantDetail } from '../components/RestaurantDetail'
 import { RestaurantList } from '../components/RestaurantList'
 import { useFavorites } from '../hooks/useFavorites'
 import { useRestaurants } from '../hooks/useRestaurants'
+import { resolveSelectedRestaurant } from '../features/restaurants/resolveSelectedRestaurant'
 import scoreScoutLogo from '../assets/scorescout-logo.png'
 
 type RestaurantSort = 'score-desc' | 'score-asc' | 'inspection-desc' | 'name-asc'
@@ -36,30 +37,10 @@ export function ExplorePage() {
       (!normalized || `${restaurant.name} ${restaurant.address}`.toLowerCase().includes(normalized)),
     )
   }, [restaurants, query, scoreMinimum, scoreMaximum, showFavorites, favoriteIds])
-  const selected = useMemo(() => {
-    const normalizedFacilityId = facilityId?.toUpperCase()
-    if (normalizedFacilityId) {
-      const byFacilityId = restaurants.find((restaurant) => restaurant.facilityId === normalizedFacilityId)
-      if (byFacilityId) return byFacilityId
-    }
-    if (cityCode && restaurantKey) {
-      const byRoute = restaurants.find((restaurant) =>
-        cityCode.toUpperCase() === restaurant.cityCode && restaurantKey.endsWith(`-${restaurant.routeId}`),
-      )
-      if (byRoute) return byRoute
-    }
-    if (restaurantKey) {
-      // Legacy /r/:restaurantKey links encode facilityId as a suffix (no separate
-      // param), so match against the longest facilityId first to avoid a shorter
-      // facilityId that happens to be a suffix of another one winning instead.
-      const normalizedKey = restaurantKey.toLowerCase()
-      const byLegacyKey = [...restaurants]
-        .sort((a, b) => b.facilityId.length - a.facilityId.length)
-        .find((restaurant) => normalizedKey.endsWith(`-${restaurant.facilityId.toLowerCase()}`))
-      if (byLegacyKey) return byLegacyKey
-    }
-    return null
-  }, [restaurants, facilityId, cityCode, restaurantKey])
+  const selected = useMemo(
+    () => resolveSelectedRestaurant(restaurants, { facilityId, cityCode, restaurantKey }),
+    [restaurants, facilityId, cityCode, restaurantKey],
+  )
   const selectedId = selected?.id ?? null
   const visibleRestaurants = useMemo(() => selected && !filtered.some(({ id }) => id === selected.id)
     ? [...filtered, selected]

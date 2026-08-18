@@ -7,6 +7,7 @@ interface ExplorerRow {
   route_id: string
   route_aliases?: string[]
   facility_aliases?: string[]
+  facility_category: 'school' | 'healthcare' | 'other'
   name: string
   address: string
   latitude: number
@@ -31,17 +32,27 @@ export default async (request: Request) => {
   try {
     const requestUrl = new URL(request.url)
     const search = requestUrl.searchParams.get('q')?.trim()
+    const includeAllFacilities = requestUrl.searchParams.get('includeAll') === 'true'
+    const targetRoute = requestUrl.searchParams.get('targetRoute')?.match(/^\d+$/)?.[0]
+    const targetFacility = requestUrl.searchParams.get('targetFacility')?.match(/^\d+$/)?.[0]
     // The unscoped browse/map query is capped at 1,000 (no ordering) since that's
     // meant to be "however many happen to load" for the map. A search is a much
     // narrower, scoped lookup — cap it high enough that it never truncates against
     // the full table (~6,500 restaurants) instead of inheriting the browse limit.
     const query = new URLSearchParams({ select: '*', latitude: 'not.is.null', longitude: 'not.is.null', limit: search ? '5000' : '1000' })
+    const visibilityFilters = ['facility_category.eq.other']
+    if (targetRoute) visibilityFilters.push(`route_id.eq.${targetRoute}`, `route_aliases.cs.["${targetRoute}"]`)
+    if (targetFacility) visibilityFilters.push(`facility_id.eq.${targetFacility}`, `facility_aliases.cs.["${targetFacility}"]`)
+    const searchFilters: string[] = []
     if (search) {
       const escaped = search.replace(/[,%()]/g, '')
-      query.set('or', `(name.ilike.*${escaped}*,address.ilike.*${escaped}*,search_text.ilike.*${escaped}*)`)
+      searchFilters.push(`name.ilike.*${escaped}*`, `address.ilike.*${escaped}*`, `search_text.ilike.*${escaped}*`)
       query.set('order', 'name.asc')
     }
-    const response = await supabaseRequest(`restaurant_explorer?${query}`)
+    if (!includeAllFacilities && searchFilters.length) query.set('and', `(or(${visibilityFilters}),or(${searchFilters}))`)
+    else if (!includeAllFacilities) query.set('or', `(${visibilityFilters})`)
+    else if (searchFilters.length) query.set('or', `(${searchFilters})`)
+    const response = await supabaseRequest(`restaurant_explorer_classified?${query}`)
     const rows = await response.json() as ExplorerRow[]
     const restaurants = rows.map((row) => ({
       id: row.id,
@@ -50,6 +61,7 @@ export default async (request: Request) => {
       routeId: row.route_id,
       routeAliases: row.route_aliases ?? [],
       facilityAliases: row.facility_aliases ?? [],
+      facilityCategory: row.facility_category,
       name: row.name,
       address: row.address,
       latitude: row.latitude,

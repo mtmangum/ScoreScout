@@ -13,7 +13,7 @@ Routine inspections are point-in-time snapshots. ScoreScout summarizes available
 ## Features
 
 - Map with score-aware clustering — nearby restaurants group into bubbles colored by the worst score in the group, splitting into individual pins as you zoom in
-- Search by name or address, filter by inspection profile range, sort by score/date/name
+- Search by name or address, filter by inspection profile range and place type, sort by score/date/name
 - Shareable per-restaurant links
 - Reviewed duplicate permits consolidate under one canonical establishment while preserving their official source histories and legacy links
 - Save/favorite restaurants, persisted locally and pinned above the scrolling results
@@ -87,4 +87,4 @@ Netlify deployment is configured in `netlify.toml`:
 
 ## Release status
 
-Version 1.0.0 is live with real Austin inspection data. Known limitations: the public API caps at 1,000 rows for the unscoped map/browse view (search is unaffected), and the source dataset includes non-restaurant food establishments (schools, grocery stores, etc.) not yet filtered out. See [CHANGELOG.md](CHANGELOG.md) for release notes and [docs/current-state.md](docs/current-state.md) for the full operational handoff.
+Version 1.0.0 is live with real Austin inspection data. The next local release adds a conservative default filter for identified schools and healthcare institutions; ambiguous types such as grocery and convenience stores intentionally remain visible pending audited rules. The public API still caps the unscoped map/browse view at 1,000 rows (search is unaffected). See [CHANGELOG.md](CHANGELOG.md) for release notes and [docs/current-state.md](docs/current-state.md) for the full operational handoff.

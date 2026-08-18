@@ -11,7 +11,7 @@ ScoreScout is a map-first explorer for Austin-area food-establishment inspection
 - The latest official Austin Public Health inspection score.
 - A derived, explainable Inspection History Profile based on recent official scores.
 - Google Places community ratings when a high-confidence match exists.
-- Search, score filtering, sorting, shareable detail routes, and browser-local favorites.
+- Search, score/place-type filtering, sorting, shareable detail routes, and browser-local favorites.
 
 Do not describe the profile as a food-safety verdict or independently claim that a restaurant is safe, clean, unsafe, or dirty. Inspections are point-in-time observations.
 
@@ -31,7 +31,7 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `origin/main` includes canonical duplicate handling and the accessibility fixes in `38f1bf7`. A source-only follow-up optimizing canonical membership/search and making the duplicate-rule trigger safely idempotent is committed locally but intentionally not pushed, avoiding a redundant Netlify deploy; batch it with the next production change.
+- `origin/main` includes canonical duplicate handling and the accessibility fixes in `38f1bf7`. The local branch also contains unpublished canonical-query optimization plus the facility-classification/filter work described below. It has intentionally not been pushed, avoiding another billable Netlify deploy; batch it with the next production release.
 - The Census geocoding backfill has finished; check current match counts before assuming the historical numbers below are still current.
 - All four migrations through `202608180002_canonical_restaurant_duplicates.sql` **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows them as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
 - The optimized definition currently in the local `202608180002_canonical_restaurant_duplicates.sql` was also applied directly to production after the first live alias-search query exposed a statement timeout. Production search recovered; the optimization avoids broad scans by expressing canonical membership as indexed union branches and looking up alias search terms directly from the rules table.
@@ -53,18 +53,20 @@ Do not reset, checkout, overwrite, or otherwise discard unrelated working-tree c
 - Desktop uses a fixed left sidebar and a full-height Leaflet map.
 - The sidebar flows directly from the ScoreScout brand header into search, score filtering, results, and the data disclosure footer.
 - The earlier introductory marketing block was removed to maximize result-list space.
-- Mobile (below 800px) no longer splits the screen 53/47 between map and list. A compact `.mobile-header` keeps the logo, ScoreScout name, Austin context, and theme toggle visible; a persistent `.mobile-toolbar` beneath it provides search and the Map/List segmented toggle. `ExplorePage`'s `mobileView` state is reflected as `data-mobile-view` on `.app-shell`, and only the selected Map or List view is visible (`display:none` on the other), giving each mode the remaining viewport instead of the old fixed 47vh list cap. The score-range filter and saved/sort controls still live inside the list view only (not surfaced in Map mode) — a deliberate v1 simplification; a future iteration could add a filter sheet reachable from Map mode too. The full desktop sidebar header remains hidden below 800px because the compact mobile header replaces it.
+- Mobile (below 800px) no longer splits the screen 53/47 between map and list. A compact `.mobile-header` keeps the logo, ScoreScout name, Austin context, and theme toggle visible; a persistent `.mobile-toolbar` beneath it provides search and the Map/List segmented toggle. `ExplorePage`'s `mobileView` state is reflected as `data-mobile-view` on `.app-shell`, and only the selected Map or List view is visible (`display:none` on the other), giving each mode the remaining viewport instead of the old fixed 47vh list cap. The full desktop sidebar header remains hidden below 800px because the compact mobile header replaces it.
 - Toggling `.map-region` between `display:none` and visible on mobile depends on the `MapResize` `ResizeObserver` (see above) to call `invalidateSize()` when it becomes visible again — verified working (tiles render correctly with no gaps after switching List → Map). If that resize-observer fix is ever removed, this toggle would likely break.
 - An accessible crosshair "locate me" button (`LocateButton` in `MapView.tsx`, bottom-right of the map, visible on both desktop and mobile) uses `navigator.geolocation.getCurrentPosition` and `map.flyTo(...)`. The icon pulses while locating and turns red with an unavailable label when geolocation is unsupported or denied.
 
 ### Search and filtering
 
-- Search is server-side: `useRestaurants(searchQuery)` debounces (300ms) and re-fetches `/api/restaurants?q=<query>`, which searches the full table rather than the capped 1,000-row unordered snapshot the app otherwise loads. Fixes a real bug: a restaurant outside whatever arbitrary 1,000 rows the no-search fetch happened to return was invisible to search even though it matched, once the dataset grew past the cap (e.g. Titaya's Thai Cuisine). Score/favorites filtering still happens client-side on top of whatever `restaurants` the query returned.
+- Search is server-side: `useRestaurants(searchQuery, includeAllFacilities)` debounces (300ms) and re-fetches `/api/restaurants?q=<query>`, which searches the full table rather than the capped 1,000-row unordered snapshot the app otherwise loads. Fixes a real bug: a restaurant outside whatever arbitrary 1,000 rows the no-search fetch happened to return was invisible to search even though it matched, once the dataset grew past the cap (e.g. Titaya's Thai Cuisine). Score/favorites filtering still happens client-side on top of whatever `restaurants` the query returned.
 - `restaurants.mts` uses a different `limit` depending on whether `q` is set: `1000` for the unscoped browse/map query (unchanged, still no `order`), `5000` for a search query (comfortably above the ~6,500-restaurant table so a name/address search can't itself silently truncate), plus `order=name.asc` for determinism. Don't let a future edit collapse these back to one shared limit.
 - The search box has a clear (×) button, shown only when there's text in it.
 - The dual range control filters Inspection History Profile scores from 50 through 100.
 - Slider handles use a neutral dark brand color; the active track remains score-colored.
+- The score-range slider remains inline beneath search so its effect is immediately visible on the map. The default API request shows conservatively classified consumer-facing/uncertain facilities (`facility_category=other`); a secondary “Show all inspected facilities” checkbox inside the existing “About scores & data” disclosure adds identified schools and healthcare institutions without adding another primary control.
 - A selected deep-linked restaurant is kept visible even when outside the active filter.
+- Direct detail routes add the targeted route/facility (including canonical aliases) to the default category query, preserving shared links to classified institutional facilities without broadening the rest of the list.
 
 ### Sorting
 
@@ -168,7 +170,9 @@ Last checked on 2026-08-17:
 - Official API: 6,518 distinct facilities and 20,964 inspection rows.
 - Most recent completed ScoreScout import: 6,511 facilities and 20,911 inspection rows.
 
-The dataset does not contain a reliable establishment-type field. A classification step is required before claiming that all imported facilities are restaurants.
+The dataset does not contain a reliable establishment-type field. Local, not-yet-deployed migration `202608180003_facility_classification.sql` adds conservative name-based classification. A read-only production audit found 272 school and 55 healthcare canonical facilities (327 total), leaving 6,183 as `other`. The word-boundary healthcare rule deliberately avoids false matches such as “Hospitality.” Grocery stores and other ambiguous facility types remain visible until similarly high-confidence rules or manual review exist.
+
+Classification stores `facility_category`, confidence, method, and a manual-lock flag on `restaurants`. Daily imports apply the shared `rules-v1` classifier; a trigger protects manually locked classifications from subsequent rules-based imports. The UI/API change and migration are local only and must be deployed together, with the migration applied before the new function begins querying `restaurant_explorer_classified`.
 
 ### Coordinate coverage history
 
@@ -190,9 +194,10 @@ Do not simply remove the coordinate filter and pass null coordinates into `MapVi
 
 File: `netlify/functions/restaurants.mts`
 
-- Reads the `restaurant_explorer` Supabase view.
+- Local pending version reads `restaurant_explorer_classified`; production continues to read `restaurant_explorer` until the classification release is deployed.
 - Requires non-null latitude and longitude.
-- Limits the query to 1,000 rows.
+- Limits the unscoped query to 1,000 rows and search to 5,000 rows.
+- Defaults to `facility_category=other`; `includeAll=true` removes that category constraint.
 - Returns profiles, five recent inspections, and optional Google community ratings.
 - Uses `Cache-Control: public, max-age=60, s-maxage=300`.
 
@@ -203,6 +208,7 @@ File: `netlify/functions/import-austin.mts`
 - Scheduled daily at `0 7 * * *` UTC.
 - Fetches the Socrata dataset in 5,000-row pages.
 - Upserts restaurants by `facility_id`.
+- Applies conservative `rules-v1` facility category/confidence values while respecting manually locked database overrides.
 - Inserts inspections idempotently using a derived `source_row_id`.
 - Recalculates profiles using algorithm version `v1`.
 - Records successful runs in `data_sources`.
@@ -254,6 +260,7 @@ Migrations:
 - `supabase/migrations/202608172200_geocoding_views.sql`
 - `supabase/migrations/202608180001_fix_route_id_truncation.sql` — see "Fixed incidents worth knowing about" above
 - `supabase/migrations/202608180002_canonical_restaurant_duplicates.sql` — reviewed canonical grouping and the Titaya seed rule; applied to production 2026-08-18
+- `supabase/migrations/202608180003_facility_classification.sql` — local only, not applied to production; category metadata, lock-preserving trigger, conservative backfill, and classified explorer view
 
 Main objects:
 
@@ -264,12 +271,13 @@ Main objects:
 - `data_sources`
 - `set_restaurant_location()` trigger function
 - `restaurant_explorer` security-invoker view
+- `restaurant_explorer_classified` security-invoker view (pending migration)
 - `restaurants_needing_geocode`, `restaurants_needing_rating` security-invoker views
 - `restaurant_duplicate_rules`
 - `restaurant_canonical_members` security-invoker view
 - `refresh_canonical_restaurant_profile(text)` profile refresh function
 
-PostGIS stores restaurant locations as geography points. Public read-only RLS policies exist on the four user-facing tables. Anonymous/authenticated roles receive select access to those tables and `restaurant_explorer`. Server-side writes use the Supabase secret key.
+PostGIS stores restaurant locations as geography points. Public read-only RLS policies exist on the four user-facing tables. Anonymous/authenticated roles receive select access to those tables and the explorer views. Server-side writes use the Supabase secret key.
 
 ## Environment variables
 
@@ -301,7 +309,7 @@ npm test
 git diff --check
 ```
 
-The test suite includes scoring, URL resolution (including canonical aliases), Google Places matching, and canonical inspection-history grouping.
+The test suite includes scoring, URL resolution (including canonical aliases), Google Places matching, canonical inspection-history grouping, and conservative facility classification.
 
 ## Fixed incidents worth knowing about
 
@@ -313,7 +321,7 @@ The test suite includes scoring, URL resolution (including canonical aliases), G
 Highest priority:
 
 1. Marker clustering is implemented (see Map section above) and solves rendering thousands of markers at once. Viewport-based *data loading* is still not implemented — `/api/restaurants` still returns up to 1,000 rows regardless of what's visible, which interacts with known issue #4 below.
-2. The source needs classification so schools, stores, hospitals, and other facilities are not presented indiscriminately as restaurants.
+2. Conservative classification is implemented locally for high-confidence school and healthcare names but is not deployed. Grocery stores, convenience stores, and other ambiguous establishment types remain `other`; expand only with audited, low-false-positive rules or manual review.
 3. Favorites are browser-local only; account-backed synchronization would require authentication and a user-favorites table.
 4. The API hard limit is 1,000 and there is no pagination or viewport query.
 5. The README and older implementation handoff contain some early-stack recommendations that no longer reflect the deployed Netlify/Supabase implementation; use this document as the current source of truth.

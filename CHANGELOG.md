@@ -11,6 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added reviewed duplicate-facility rules that retain Austin source identities while presenting linked records as one canonical establishment.
 - Seeded the former and current Titaya's Thai Cuisine facility IDs as the first reviewed canonical group.
 - Added canonical-aware inspection profile calculation, community-rating reuse, alias search, and legacy deep-link resolution.
+- Added conservative school/healthcare classification with confidence metadata, protected manual overrides, and import-time refresh.
+- Added a secondary “Show all inspected facilities” checkbox inside the existing “About scores & data” disclosure.
+
+### Changed
+
+- Default explorer requests now omit high-confidence school and healthcare facilities while preserving them through the opt-in filter and direct links.
 
 ### Fixed
 

@@ -1,5 +1,6 @@
 import { calculateProfile } from '../../src/features/restaurants/score.ts'
 import { groupCanonicalInspectionScores } from '../../scripts/lib/canonicalRestaurants.ts'
+import { classifyFacility } from '../../scripts/lib/classifyFacility.ts'
 import { supabaseRequest } from './_shared/supabase.mts'
 
 const sourceUrl = 'https://data.austintexas.gov/resource/ecmv-9xxi.json'
@@ -46,10 +47,16 @@ export default async () => {
       const response = await supabaseRequest('restaurants?on_conflict=facility_id&select=id,facility_id', {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify(batch.map((row) => ({
-          facility_id: row.facility_id, city_code: 'AUS', name: row.restaurant_name,
-          address: row.address, zip_code: row.zip_code ?? null, source_updated_at: startedAt,
-        }))),
+        body: JSON.stringify(batch.map((row) => {
+          const classification = classifyFacility(row.restaurant_name)
+          return {
+            facility_id: row.facility_id, city_code: 'AUS', name: row.restaurant_name,
+            address: row.address, zip_code: row.zip_code ?? null, source_updated_at: startedAt,
+            facility_category: classification.category,
+            classification_confidence: classification.confidence,
+            classification_method: classification.method,
+          }
+        })),
       })
       storedRestaurants.push(...await response.json() as StoredRestaurant[])
     }

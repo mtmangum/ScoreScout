@@ -1,4 +1,5 @@
 export type Confidence = 'Limited' | 'Moderate' | 'Good' | 'High'
+export type FacilityCategory = 'school' | 'healthcare' | 'other'
 
 export interface Inspection {
   id: string
@@ -33,6 +34,7 @@ export interface Restaurant {
   facilityId: string
   routeAliases?: string[]
   facilityAliases?: string[]
+  facilityCategory?: FacilityCategory
   name: string
   address: string
   latitude: number

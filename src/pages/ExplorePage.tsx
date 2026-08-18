@@ -40,11 +40,16 @@ function slugify(value: string) {
 
 export function ExplorePage() {
   const navigate = useNavigate()
+  const { facilityId, restaurantKey, cityCode } = useParams<{ facilityId: string; restaurantKey: string; cityCode: string }>()
   const [query, setQuery] = useState('')
-  const { restaurants, source, loading } = useRestaurants(query)
+  const [includeAllFacilities, setIncludeAllFacilities] = useState(false)
+  const routeSuffix = restaurantKey?.match(/-(\d+)$/)?.[1]
+  const target = cityCode ? { routeId: routeSuffix } : { facilityId: facilityId ?? routeSuffix }
+  // A direct institutional link is included alongside the default category,
+  // without broadening the whole list to every facility type.
+  const { restaurants, source, loading } = useRestaurants(query, includeAllFacilities, target)
   const { favoriteIds, toggleFavorite } = useFavorites()
   const { theme, toggleTheme } = useTheme()
-  const { facilityId, restaurantKey, cityCode } = useParams<{ facilityId: string; restaurantKey: string; cityCode: string }>()
   const [scoreMinimum, setScoreMinimum] = useState(50)
   const [scoreMaximum, setScoreMaximum] = useState(100)
   const [sortBy, setSortBy] = useState<RestaurantSort>('inspection-desc')
@@ -146,6 +151,10 @@ export function ExplorePage() {
             <summary>About scores &amp; data</summary>
             <p>Inspection results are snapshots of conditions observed by Austin Public Health. The profile summarizes available history and is not an independent food-safety determination.</p>
             <p>Community ratings reflect customer sentiment and are separate from official inspections. Preview ratings are fixture data until Google Places is connected.</p>
+            <label className="footer-facility-toggle">
+              <input type="checkbox" checked={includeAllFacilities} onChange={(event) => setIncludeAllFacilities(event.target.checked)} />
+              <span><strong>Show all inspected facilities</strong><small>Includes identified schools, hospitals, nursing facilities, and similar institutional locations.</small></span>
+            </label>
           </details>
           <span>{source === 'live' ? 'Data source: City of Austin' : 'Live data unavailable · Sample restaurants shown'}</span>
         </footer>

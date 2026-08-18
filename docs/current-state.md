@@ -53,7 +53,9 @@ Do not reset, checkout, overwrite, or otherwise discard unrelated working-tree c
 - Desktop uses a fixed left sidebar and a full-height Leaflet map.
 - The sidebar flows directly from the ScoreScout brand header into search, score filtering, results, and the data disclosure footer.
 - The earlier introductory marketing block was removed to maximize result-list space.
-- Mobile uses the map in the upper portion and the sidebar/results below it. The full desktop brand header is currently hidden below 800 px.
+- Mobile (below 800px) no longer splits the screen 53/47 between map and list. A persistent `.mobile-toolbar` (search input + Map/List segmented toggle, driven by `ExplorePage`'s `mobileView` state, reflected as `data-mobile-view` on `.app-shell`) sits above full-height Map or List views — only one is visible at a time (`display:none` on the other via `[data-mobile-view="…"]` CSS), giving each mode the whole remaining viewport instead of the old fixed 47vh list cap. The score-range filter and saved/sort controls still live inside the list view only (not surfaced in Map mode) — a deliberate v1 simplification; a future iteration could add a filter sheet reachable from Map mode too. The full desktop brand header is still hidden below 800px (unrelated to the toolbar, which is a separate element).
+- Toggling `.map-region` between `display:none` and visible on mobile depends on the `MapResize` `ResizeObserver` (see above) to call `invalidateSize()` when it becomes visible again — verified working (tiles render correctly with no gaps after switching List → Map). If that resize-observer fix is ever removed, this toggle would likely break.
+- A "locate me" button (`LocateButton` in `MapView.tsx`, bottom-right of the map, visible on both desktop and mobile) uses `navigator.geolocation.getCurrentPosition` and `map.flyTo(...)`. Fails silently (button returns to idle state) if geolocation is unavailable or the user denies the permission prompt — no error UI beyond that today.
 
 ### Search and filtering
 

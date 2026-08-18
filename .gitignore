@@ -10,6 +10,9 @@ dist
 # Local Supabase project link metadata
 supabase/.temp
 
+# Local netlify dev artifact (Deno edge function runtime)
+deno.lock
+
 # Local agent/session notes
 PROJECT_STATE.md
 AGENTS.md

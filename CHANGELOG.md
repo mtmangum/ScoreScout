@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Server-side search: the search box now queries the full restaurant dataset via the API's `q` parameter instead of only whatever single page of results was already loaded client-side.
 - Clear (×) button in the search box, shown once you've typed something.
 - Light/dark theme toggle (sidebar header), following system preference by default and persisting your choice.
+- Mobile: a Map/List toggle switches between full-height map and full-height list views instead of the old fixed 53/47 split, with a persistent search field pinned above both.
+- A "locate me" button on the map centers and zooms to your current location (desktop and mobile).
 
 ### Changed
 

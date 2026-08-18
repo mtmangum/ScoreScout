@@ -10,6 +10,7 @@ import { resolveSelectedRestaurant } from '../features/restaurants/resolveSelect
 import scoreScoutLogo from '../assets/scorescout-logo.png'
 
 type RestaurantSort = 'score-desc' | 'score-asc' | 'inspection-desc' | 'name-asc'
+type MobileView = 'map' | 'list'
 
 function slugify(value: string) {
   return value
@@ -31,6 +32,7 @@ export function ExplorePage() {
   const [scoreMaximum, setScoreMaximum] = useState(100)
   const [sortBy, setSortBy] = useState<RestaurantSort>('inspection-desc')
   const [showFavorites, setShowFavorites] = useState(false)
+  const [mobileView, setMobileView] = useState<MobileView>('map')
   // Search itself is server-side (see useRestaurants) since the API caps at 1,000
   // unordered rows and the full dataset is larger than that; only score/favorites
   // filtering happens here, on top of whatever `restaurants` the query returned.
@@ -67,7 +69,18 @@ export function ExplorePage() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-mobile-view={mobileView}>
+      <div className="mobile-toolbar">
+        <label className="search">
+          <span>⌕</span>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or address" />
+          {query && <button type="button" className="search-clear" onClick={() => setQuery('')} aria-label="Clear search">×</button>}
+        </label>
+        <div className="mobile-view-toggle" role="group" aria-label="Map or list view">
+          <button type="button" className={mobileView === 'map' ? 'active' : undefined} onClick={() => setMobileView('map')} aria-pressed={mobileView === 'map'}>Map</button>
+          <button type="button" className={mobileView === 'list' ? 'active' : undefined} onClick={() => setMobileView('list')} aria-pressed={mobileView === 'list'}>List</button>
+        </div>
+      </div>
       <section className="sidebar">
         <header className="brand">
           <img className="brand-mark" src={scoreScoutLogo} alt="" />

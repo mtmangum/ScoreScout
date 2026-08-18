@@ -127,6 +127,37 @@ function MapResize() {
   return null
 }
 
+function LocateButton() {
+  const map = useMap()
+  const [status, setStatus] = useState<'idle' | 'locating' | 'denied'>('idle')
+
+  const handleClick = () => {
+    if (!navigator.geolocation) return
+    setStatus('locating')
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        map.flyTo([position.coords.latitude, position.coords.longitude], 16, { duration: 1 })
+        setStatus('idle')
+      },
+      () => setStatus('denied'),
+      { enableHighAccuracy: true, timeout: 8000 },
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="locate-button"
+      onClick={handleClick}
+      disabled={status === 'locating'}
+      aria-label={status === 'denied' ? 'Location unavailable' : 'Go to my location'}
+      title={status === 'denied' ? 'Location unavailable' : 'Go to my location'}
+    >
+      <span aria-hidden="true">{status === 'locating' ? '…' : '◎'}</span>
+    </button>
+  )
+}
+
 function ClusterMarkers({ index, restaurantsById, selectedId, onSelect }: {
   index: RestaurantCluster
   restaurantsById: Map<string, Restaurant>
@@ -195,6 +226,7 @@ export function MapView({ restaurants, selectedId, onSelect }: MapViewProps) {
           and never re-clusters for the new viewport. */}
       <ClusterMarkers index={clusterIndex} restaurantsById={restaurantsById} selectedId={selectedId} onSelect={onSelect} />
       <SelectionPan restaurant={selectedRestaurant} index={clusterIndex} />
+      <LocateButton />
     </MapContainer>
   )
 }

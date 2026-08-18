@@ -66,12 +66,14 @@ export function ExplorePage() {
     : filtered, [filtered, selected])
   const sortedRestaurants = useMemo(() => {
     return [...visibleRestaurants].sort((a, b) => {
+      const favoriteOrder = Number(favoriteIds.has(b.id)) - Number(favoriteIds.has(a.id))
+      if (favoriteOrder) return favoriteOrder
       if (sortBy === 'score-desc') return b.profile.score - a.profile.score || a.name.localeCompare(b.name)
       if (sortBy === 'score-asc') return a.profile.score - b.profile.score || a.name.localeCompare(b.name)
       if (sortBy === 'inspection-desc') return new Date(b.inspections[0].date).getTime() - new Date(a.inspections[0].date).getTime() || a.name.localeCompare(b.name)
       return a.name.localeCompare(b.name)
     })
-  }, [visibleRestaurants, sortBy])
+  }, [visibleRestaurants, sortBy, favoriteIds])
   const scoreColor = (score: number) => score >= 90 ? '#18724b' : score >= 70 ? '#d28524' : '#b54735'
   const minimumProgress = (scoreMinimum - 50) * 2
   const maximumProgress = (scoreMaximum - 50) * 2

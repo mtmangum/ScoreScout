@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- Kept saved restaurants permanently pinned until explicitly unchecked, independent of search, score filters, facility categories, or the API's 1,000-row browse page; existing ID-only favorites migrate to locally cached, API-refreshed snapshots.
 - Optimized canonical duplicate membership and alias search queries to avoid production statement timeouts, and made the duplicate-rule trigger safely idempotent.
 - Improved amber contrast by separating amber backgrounds from theme-aware amber text colors.
 - Added consistent keyboard focus indicators, including a visible focus treatment around search.

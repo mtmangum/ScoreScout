@@ -7,6 +7,7 @@ import { useFavorites } from '../hooks/useFavorites'
 import { useRestaurants } from '../hooks/useRestaurants'
 import { useTheme } from '../hooks/useTheme'
 import { resolveSelectedRestaurant } from '../features/restaurants/resolveSelectedRestaurant'
+import { composeRestaurantList, mergeRestaurantSources } from '../features/restaurants/favoriteRestaurants'
 import scoreScoutLogo from '../assets/scorescout-logo.png'
 
 type RestaurantSort = 'score-desc' | 'score-asc' | 'inspection-desc' | 'name-asc'
@@ -48,7 +49,7 @@ export function ExplorePage() {
   // A direct institutional link is included alongside the default category,
   // without broadening the whole list to every facility type.
   const { restaurants, source, loading } = useRestaurants(query, includeAllFacilities, target)
-  const { favoriteIds, toggleFavorite } = useFavorites()
+  const { favoriteIds, favoriteRestaurants, toggleFavorite } = useFavorites()
   const { theme, toggleTheme } = useTheme()
   const [scoreMinimum, setScoreMinimum] = useState(50)
   const [scoreMaximum, setScoreMaximum] = useState(100)
@@ -56,24 +57,32 @@ export function ExplorePage() {
   const [showFavorites, setShowFavorites] = useState(false)
   const [mobileView, setMobileView] = useState<MobileView>('map')
   // Search itself is server-side (see useRestaurants) since the API caps at 1,000
-  // unordered rows and the full dataset is larger than that; only score/favorites
-  // filtering happens here, on top of whatever `restaurants` the query returned.
-  const filtered = useMemo(() => {
-    return restaurants.filter((restaurant) =>
-      restaurant.profile.score >= scoreMinimum && restaurant.profile.score <= scoreMaximum &&
-      (!showFavorites || favoriteIds.has(restaurant.id)),
-    )
-  }, [restaurants, scoreMinimum, scoreMaximum, showFavorites, favoriteIds])
+  // unordered rows and the full dataset is larger than that. Score filtering
+  // applies to that response; saved snapshots are merged separately below so
+  // favorites cannot vanish with the current page or query.
+  const allRestaurants = useMemo(() => mergeRestaurantSources(restaurants, favoriteRestaurants), [restaurants, favoriteRestaurants])
+  const filtered = useMemo(() => restaurants.filter((restaurant) =>
+    restaurant.profile.score >= scoreMinimum && restaurant.profile.score <= scoreMaximum,
+  ), [restaurants, scoreMinimum, scoreMaximum])
+  const savedRestaurants = useMemo(() => allRestaurants.filter(({ id }) => favoriteIds.has(id)), [allRestaurants, favoriteIds])
   const selected = useMemo(
-    () => resolveSelectedRestaurant(restaurants, { facilityId, cityCode, restaurantKey }),
-    [restaurants, facilityId, cityCode, restaurantKey],
+    () => resolveSelectedRestaurant(allRestaurants, { facilityId, cityCode, restaurantKey }),
+    [allRestaurants, facilityId, cityCode, restaurantKey],
   )
   const selectedId = selected?.id ?? null
-  const visibleRestaurants = useMemo(() => selected && !filtered.some(({ id }) => id === selected.id)
+  const browseRestaurants = useMemo(() => selected && !filtered.some(({ id }) => id === selected.id)
     ? [...filtered, selected]
     : filtered, [filtered, selected])
+  const mapRestaurants = useMemo(() => {
+    const base = showFavorites ? savedRestaurants : browseRestaurants
+    return selected && !base.some(({ id }) => id === selected.id) ? [...base, selected] : base
+  }, [showFavorites, savedRestaurants, browseRestaurants, selected])
+  const listRestaurants = useMemo(
+    () => composeRestaurantList(savedRestaurants, browseRestaurants, favoriteIds, showFavorites),
+    [showFavorites, savedRestaurants, browseRestaurants, favoriteIds],
+  )
   const sortedRestaurants = useMemo(() => {
-    return [...visibleRestaurants].sort((a, b) => {
+    return [...listRestaurants].sort((a, b) => {
       const favoriteOrder = Number(favoriteIds.has(b.id)) - Number(favoriteIds.has(a.id))
       if (favoriteOrder) return favoriteOrder
       if (sortBy === 'score-desc') return b.profile.score - a.profile.score || a.name.localeCompare(b.name)
@@ -81,12 +90,12 @@ export function ExplorePage() {
       if (sortBy === 'inspection-desc') return new Date(b.inspections[0].date).getTime() - new Date(a.inspections[0].date).getTime() || a.name.localeCompare(b.name)
       return a.name.localeCompare(b.name)
     })
-  }, [visibleRestaurants, sortBy, favoriteIds])
+  }, [listRestaurants, sortBy, favoriteIds])
   const scoreColor = (score: number) => score >= 90 ? 'var(--green)' : score >= 70 ? 'var(--amber)' : 'var(--red)'
   const minimumProgress = (scoreMinimum - 50) * 2
   const maximumProgress = (scoreMaximum - 50) * 2
   const selectRestaurant = (id: string) => {
-    const restaurant = restaurants.find((candidate) => candidate.id === id)
+    const restaurant = allRestaurants.find((candidate) => candidate.id === id)
     if (restaurant) navigate(`/${restaurant.cityCode}/${slugify(restaurant.name)}-${restaurant.routeId}`)
   }
 
@@ -134,7 +143,7 @@ export function ExplorePage() {
           </div>
         </div>
         <div className="results-heading">
-          <div className="results-meta"><strong>{visibleRestaurants.length} places</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
+          <div className="results-meta"><strong>{sortedRestaurants.length} places</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
           <div className="results-controls">
             <button className={`saved-filter ${showFavorites ? 'active' : ''}`} type="button" onClick={() => setShowFavorites((current) => !current)} aria-pressed={showFavorites} aria-label={`${showFavorites ? 'Show all restaurants' : 'Show saved restaurants'}; ${favoriteIds.size} saved`}><span aria-hidden="true">★</span> {favoriteIds.size}</button>
             <select className="sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value as RestaurantSort)} aria-label="Sort restaurants">
@@ -145,7 +154,10 @@ export function ExplorePage() {
             </select>
           </div>
         </div>
-        <RestaurantList restaurants={sortedRestaurants} selectedId={selectedId} favoriteIds={favoriteIds} favoritesOnly={showFavorites} onSelect={selectRestaurant} onToggleFavorite={toggleFavorite} />
+        <RestaurantList restaurants={sortedRestaurants} selectedId={selectedId} favoriteIds={favoriteIds} favoritesOnly={showFavorites} onSelect={selectRestaurant} onToggleFavorite={(id) => {
+          const restaurant = allRestaurants.find((candidate) => candidate.id === id)
+          if (restaurant) toggleFavorite(restaurant)
+        }} />
         <footer>
           <details>
             <summary>About scores &amp; data</summary>
@@ -159,7 +171,7 @@ export function ExplorePage() {
           <span>{source === 'live' ? 'Data source: City of Austin' : 'Live data unavailable · Sample restaurants shown'}</span>
         </footer>
       </section>
-      <section className="map-region"><MapView restaurants={visibleRestaurants} selectedId={selectedId} onSelect={selectRestaurant} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
+      <section className="map-region"><MapView restaurants={mapRestaurants} selectedId={selectedId} onSelect={selectRestaurant} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
       {selected && <RestaurantDetail restaurant={selected} onClose={() => navigate('/')} />}
     </main>
   )

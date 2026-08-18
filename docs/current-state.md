@@ -59,7 +59,7 @@ Do not reset, checkout, overwrite, or otherwise discard unrelated working-tree c
 
 ### Search and filtering
 
-- Search is server-side: `useRestaurants(searchQuery, includeAllFacilities)` debounces (300ms) and re-fetches `/api/restaurants?q=<query>`, which searches the full table rather than the capped 1,000-row unordered snapshot the app otherwise loads. Fixes a real bug: a restaurant outside whatever arbitrary 1,000 rows the no-search fetch happened to return was invisible to search even though it matched, once the dataset grew past the cap (e.g. Titaya's Thai Cuisine). Score/favorites filtering still happens client-side on top of whatever `restaurants` the query returned.
+- Search is server-side: `useRestaurants(searchQuery, includeAllFacilities)` debounces (300ms) and re-fetches `/api/restaurants?q=<query>`, which searches the full table rather than the capped 1,000-row unordered snapshot the app otherwise loads. Fixes a real bug: a restaurant outside whatever arbitrary 1,000 rows the no-search fetch happened to return was invisible to search even though it matched, once the dataset grew past the cap (e.g. Titaya's Thai Cuisine). Score filtering still happens client-side; favorites are composed independently from the current response.
 - `restaurants.mts` uses a different `limit` depending on whether `q` is set: `1000` for the unscoped browse/map query (unchanged, still no `order`), `5000` for a search query (comfortably above the ~6,500-restaurant table so a name/address search can't itself silently truncate), plus `order=name.asc` for determinism. Don't let a future edit collapse these back to one shared limit.
 - The search box has a clear (×) button, shown only when there's text in it.
 - The dual range control filters Inspection History Profile scores from 50 through 100.
@@ -82,9 +82,10 @@ Alphabetical name order breaks score/date ties.
 ### Favorites
 
 - A star is available on every list row (the detail panel's own save button was removed as redundant).
-- Favorite IDs persist in browser `localStorage` under `scorescout-favorite-restaurants`.
+- Favorite IDs and restaurant snapshots persist in browser `localStorage` under `scorescout-favorite-restaurants`. The parser migrates the previous ID-only array format without losing saved IDs.
 - Favorites do not require an account and do not sync between browsers/devices.
-- In the normal results view, favorites appear in a fixed saved section that does not move when the regular-result list scrolls.
+- On load and whenever IDs change, `/api/restaurants?ids=<uuid,...>` refreshes saved snapshots in batches of 50. The endpoint bypasses category/search constraints for exact validated IDs.
+- In the normal results view, every hydrated favorite appears in a fixed saved section that does not move when the regular-result list scrolls. The section is composed independently of the current 1,000-row browse page, search, score range, and facility category, so a saved restaurant remains there until its star is unchecked. Stored snapshots remain usable if refresh is temporarily unavailable.
 - The fixed section is height-capped and becomes independently scrollable when many items are saved.
 - The star counter can switch to a saved-only view; that view scrolls normally.
 - Saved and unsaved groups preserve the selected sort order internally.
@@ -198,6 +199,7 @@ File: `netlify/functions/restaurants.mts`
 - Requires non-null latitude and longitude.
 - Limits the unscoped query to 1,000 rows and search to 5,000 rows.
 - Defaults to `facility_category=other`; `includeAll=true` removes that category constraint.
+- Exact `ids=<uuid,...>` lookups return up to 50 validated saved restaurants without category/search filtering so browser-local favorites can be hydrated reliably.
 - Returns profiles, five recent inspections, and optional Google community ratings.
 - Uses `Cache-Control: public, max-age=60, s-maxage=300`.
 

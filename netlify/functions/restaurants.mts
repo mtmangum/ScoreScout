@@ -28,9 +28,17 @@ interface ExplorerRow {
 export default async (request: Request) => {
   try {
     const requestUrl = new URL(request.url)
-    const query = new URLSearchParams({ select: '*', latitude: 'not.is.null', longitude: 'not.is.null', limit: '1000' })
     const search = requestUrl.searchParams.get('q')?.trim()
-    if (search) query.set('or', `(name.ilike.*${search.replace(/[,%()]/g, '')}*,address.ilike.*${search.replace(/[,%()]/g, '')}*)`)
+    // The unscoped browse/map query is capped at 1,000 (no ordering) since that's
+    // meant to be "however many happen to load" for the map. A search is a much
+    // narrower, scoped lookup — cap it high enough that it never truncates against
+    // the full table (~6,500 restaurants) instead of inheriting the browse limit.
+    const query = new URLSearchParams({ select: '*', latitude: 'not.is.null', longitude: 'not.is.null', limit: search ? '5000' : '1000' })
+    if (search) {
+      const escaped = search.replace(/[,%()]/g, '')
+      query.set('or', `(name.ilike.*${escaped}*,address.ilike.*${escaped}*)`)
+      query.set('order', 'name.asc')
+    }
     const response = await supabaseRequest(`restaurant_explorer?${query}`)
     const rows = await response.json() as ExplorerRow[]
     const restaurants = rows.map((row) => ({

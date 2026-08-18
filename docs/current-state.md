@@ -31,7 +31,8 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to commit `7f0a814` (`Fix wrong-restaurant clicks, remove cluster count labels, ease big zooms`).
+- `main` and `origin/main` point to commit `ccb128b` (`Server-side search, remove basemap toggle, stop recentering on close`).
+- The Census geocoding backfill (see "Why production currently shows only a small subset" above) has finished; check current match counts before assuming the numbers there are still current.
 - No known uncommitted work is pending as of this handoff.
 - All three migrations (`202608170001_initial_schema.sql`, `202608172200_geocoding_views.sql`, `202608180001_fix_route_id_truncation.sql`) **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track any of them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows all as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
 - A one-off Census geocoding backfill script (not committed — it duplicates `geocode-census-background.mts`'s logic but runs synchronously from the agent's shell using the production `SUPABASE_URL`/`SUPABASE_SECRET_KEY` pulled via `netlify env:get`, since Netlify's `-background` functions return `202` with an empty body immediately, making progress untrackable from the HTTP response alone) was started against the ~6,494-restaurant backlog. Check whether it has finished; if still running, do not start a second copy — it would double up on Census requests and race PATCH writes to the same rows.
@@ -56,7 +57,9 @@ Do not reset, checkout, overwrite, or otherwise discard unrelated working-tree c
 
 ### Search and filtering
 
-- Search is server-side: `useRestaurants(searchQuery)` debounces (300ms) and re-fetches `/api/restaurants?q=<query>`, which searches the full table rather than the capped 1,000-row unordered snapshot the app otherwise loads. Fixes a real bug: a restaurant outside whatever arbitrary 1,000 rows the no-search fetch happened to return was invisible to search even though it matched, once the dataset grew past the cap. Score/favorites filtering still happens client-side on top of whatever `restaurants` the query returned.
+- Search is server-side: `useRestaurants(searchQuery)` debounces (300ms) and re-fetches `/api/restaurants?q=<query>`, which searches the full table rather than the capped 1,000-row unordered snapshot the app otherwise loads. Fixes a real bug: a restaurant outside whatever arbitrary 1,000 rows the no-search fetch happened to return was invisible to search even though it matched, once the dataset grew past the cap (e.g. Titaya's Thai Cuisine). Score/favorites filtering still happens client-side on top of whatever `restaurants` the query returned.
+- `restaurants.mts` uses a different `limit` depending on whether `q` is set: `1000` for the unscoped browse/map query (unchanged, still no `order`), `5000` for a search query (comfortably above the ~6,500-restaurant table so a name/address search can't itself silently truncate), plus `order=name.asc` for determinism. Don't let a future edit collapse these back to one shared limit.
+- The search box has a clear (×) button, shown only when there's text in it.
 - The dual range control filters Inspection History Profile scores from 50 through 100.
 - Slider handles use a neutral dark brand color; the active track remains score-colored.
 - A selected deep-linked restaurant is kept visible even when outside the active filter.
@@ -74,13 +77,20 @@ Alphabetical name order breaks score/date ties.
 
 ### Favorites
 
-- A star is available on every list row and in the restaurant detail panel.
+- A star is available on every list row (the detail panel's own save button was removed as redundant).
 - Favorite IDs persist in browser `localStorage` under `scorescout-favorite-restaurants`.
 - Favorites do not require an account and do not sync between browsers/devices.
 - In the normal results view, favorites appear in a fixed saved section that does not move when the regular-result list scrolls.
 - The fixed section is height-capped and becomes independently scrollable when many items are saved.
 - The star counter can switch to a saved-only view; that view scrolls normally.
 - Saved and unsaved groups preserve the selected sort order internally.
+
+### Theme
+
+- Light/dark toggle (sun/moon icon, top-right of the brand header). `useTheme` persists the choice to `localStorage` (`scorescout-theme`) and defaults to `prefers-color-scheme` when nothing is stored; `document.documentElement.dataset.theme` drives CSS. An inline script in `index.html` sets the attribute before React hydrates, to avoid a flash of the wrong theme on load.
+- CSS is token-based (`--ink`, `--muted`, `--paper`, `--cream`, `--line`, `--surface`, `--surface-hover`, `--surface-highlight`, plus `--green`/`--amber`/`--red`) with a `:root[data-theme="dark"]` override block in `src/styles/index.css`. Most of the app follows the tokens automatically; a handful of accent surfaces that were still hardcoded hex (community rating card, pinned-restaurants highlight, score chart band/line/grid colors, the map's floating score legend) needed explicit `:root[data-theme="dark"] .selector {}` overrides — check there before assuming a new colored surface will "just work" in dark mode.
+- The map has no dark tile provider; dark mode applies a CSS `filter` (`invert(1) hue-rotate(180deg) ...`) to `.leaflet-tile-pane` instead. This was called out as a known compromise vs. switching to a proper dark tile set (e.g. CARTO dark) — cheaper to ship, but tiles read slightly muddy/desaturated compared to a real dark basemap. Revisit if dark mode gets real usage.
+- This was explicitly scoped as a prototype, not a full design pass — don't assume every future colored UI element will automatically theme correctly; check it against `[data-theme="dark"]` when adding one.
 
 ### Map
 

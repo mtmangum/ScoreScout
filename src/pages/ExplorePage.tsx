@@ -5,6 +5,7 @@ import { RestaurantDetail } from '../components/RestaurantDetail'
 import { RestaurantList } from '../components/RestaurantList'
 import { useFavorites } from '../hooks/useFavorites'
 import { useRestaurants } from '../hooks/useRestaurants'
+import { useTheme } from '../hooks/useTheme'
 import { resolveSelectedRestaurant } from '../features/restaurants/resolveSelectedRestaurant'
 import scoreScoutLogo from '../assets/scorescout-logo.png'
 
@@ -24,6 +25,7 @@ export function ExplorePage() {
   const [query, setQuery] = useState('')
   const { restaurants, source, loading } = useRestaurants(query)
   const { favoriteIds, toggleFavorite } = useFavorites()
+  const { theme, toggleTheme } = useTheme()
   const { facilityId, restaurantKey, cityCode } = useParams<{ facilityId: string; restaurantKey: string; cityCode: string }>()
   const [scoreMinimum, setScoreMinimum] = useState(50)
   const [scoreMaximum, setScoreMaximum] = useState(100)
@@ -67,9 +69,19 @@ export function ExplorePage() {
   return (
     <main className="app-shell">
       <section className="sidebar">
-        <header className="brand"><img className="brand-mark" src={scoreScoutLogo} alt="" /><div><strong>ScoreScout</strong><small>Austin inspection explorer</small></div></header>
+        <header className="brand">
+          <img className="brand-mark" src={scoreScoutLogo} alt="" />
+          <div><strong>ScoreScout</strong><small>Austin inspection explorer</small></div>
+          <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
+        </header>
         <div className="filters">
-          <label className="search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or address" /></label>
+          <label className="search">
+            <span>⌕</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or address" />
+            {query && <button type="button" className="search-clear" onClick={() => setQuery('')} aria-label="Clear search">×</button>}
+          </label>
           <div className="score-filter">
             <span className="score-filter-label"><span>Inspection profile range</span><strong>{scoreMinimum === 50 && scoreMaximum === 100 ? 'Any' : `${scoreMinimum}–${scoreMaximum}`}</strong></span>
             <div className="dual-range" style={{ '--range-start': minimumProgress, '--range-end': maximumProgress, '--range-color': scoreColor(scoreMaximum) } as CSSProperties}>

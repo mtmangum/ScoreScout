@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Save/favorite restaurants (star toggle on each row and, previously, in the detail panel), persisted in the browser. Favorites stay pinned to the top of the list while scrolling, with a saved-only view.
 - Score-aware marker clustering on the map (`supercluster`): nearby restaurants group into bubbles colored by the worst score in the group, splitting into sub-clusters and individual pins as you zoom in or click a cluster.
 - Server-side search: the search box now queries the full restaurant dataset via the API's `q` parameter instead of only whatever single page of results was already loaded client-side.
+- Clear (×) button in the search box, shown once you've typed something.
+- Light/dark theme toggle (sidebar header), following system preference by default and persisting your choice.
 
 ### Changed
 
@@ -35,3 +37,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Restaurant list clicks and deep links could open the wrong restaurant: the Supabase view derived each restaurant's route id by zero-padding to 2 digits, which silently truncates (rather than just pads) any 3+ digit id — collapsing hundreds of restaurants sharing a leading two-digit prefix onto the same id once the dataset grew past ~100 restaurants. Fixed at the data layer; the URL-matching logic was also extracted into a standalone, unit-tested function (`resolveSelectedRestaurant`).
 - Deep-link restaurant matching could resolve to the wrong restaurant when one facility ID was a suffix of another, and was case-sensitive against facility IDs embedded in a URL slug.
 - A restaurant opened via deep link outside the current score filter now appears in the sidebar list and results count, not just the map.
+- A search query itself could still silently truncate results at very high match counts, since search re-used the same 1,000-row limit as the unscoped browse query; search now gets its own, much higher cap.

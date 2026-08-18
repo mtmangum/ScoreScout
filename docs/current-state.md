@@ -31,7 +31,7 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to commit `ccb128b` (`Server-side search, remove basemap toggle, stop recentering on close`).
+- `main` and `origin/main` point to commit `f4e32fc` (`Add dark mode prototype, search clear button, fix search-limit truncation`).
 - The Census geocoding backfill (see "Why production currently shows only a small subset" above) has finished; check current match counts before assuming the numbers there are still current.
 - No known uncommitted work is pending as of this handoff.
 - All three migrations (`202608170001_initial_schema.sql`, `202608172200_geocoding_views.sql`, `202608180001_fix_route_id_truncation.sql`) **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track any of them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows all as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
@@ -91,12 +91,13 @@ Alphabetical name order breaks score/date ties.
 - CSS is token-based (`--ink`, `--muted`, `--paper`, `--cream`, `--line`, `--surface`, `--surface-hover`, `--surface-highlight`, plus `--green`/`--amber`/`--red`) with a `:root[data-theme="dark"]` override block in `src/styles/index.css`. Most of the app follows the tokens automatically; a handful of accent surfaces that were still hardcoded hex (community rating card, pinned-restaurants highlight, score chart band/line/grid colors, the map's floating score legend) needed explicit `:root[data-theme="dark"] .selector {}` overrides — check there before assuming a new colored surface will "just work" in dark mode.
 - The map has no dark tile provider; dark mode applies a CSS `filter` (`invert(1) hue-rotate(180deg) ...`) to `.leaflet-tile-pane` instead. This was called out as a known compromise vs. switching to a proper dark tile set (e.g. CARTO dark) — cheaper to ship, but tiles read slightly muddy/desaturated compared to a real dark basemap. Revisit if dark mode gets real usage.
 - This was explicitly scoped as a prototype, not a full design pass — don't assume every future colored UI element will automatically theme correctly; check it against `[data-theme="dark"]` when adding one.
+- The brand logo (`assets/scorescout-logo.png`) is a transparent PNG with the pin shape and drop-shadow drawn in near-black — it visually disappeared against the dark background. Fixed with a light backdrop chip (`:root[data-theme="dark"] .brand-mark { background: var(--cream); padding: 3px }`), not by editing the image. Any other transparent asset with dark-only artwork will have the same problem in dark mode.
 
 ### Map
 
 - Leaflet with React-Leaflet.
 - Default center: Austin (`30.2747, -97.7404`), zoom 12.
-- Score markers use green for 90–100, amber for 70–89, and red below 70.
+- Score markers use green for 90–100, amber for 70–89, and red below 70. Individual pins are 34px (42px selected); cluster bubbles are 33/39/45px by size tier. The JS `size` in `scorePin`/`clusterPin` (`MapView.tsx`) and the CSS fixed px in `.map-score-pin`/`.map-score-pin.selected` (`index.css`) are two separate numbers kept in sync by hand — change both together.
 - Selecting a marker opens the detail route/panel and enlarges the marker.
 - Desktop selection pans the map to compensate for the right-side detail panel.
 - Basemap control is a three-way Map/Satellite/Hybrid switcher (top-right of the map). Satellite and Hybrid use Esri World Imagery; Hybrid layers Esri's boundary/place-labels reference tiles on top.

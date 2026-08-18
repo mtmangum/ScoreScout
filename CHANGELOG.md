@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Selecting a restaurant buried inside a map cluster now eases the camera in smoothly instead of snapping straight to the target zoom.
 - Removed the "Save restaurant" button from the detail panel — the list row's star already covers favoriting.
 - Tightened the sidebar introduction copy, then removed it to maximize result-list space.
+- Shrunk map pins and cluster bubbles so they take up less of the map.
 
 ### Fixed
 
@@ -38,3 +39,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Deep-link restaurant matching could resolve to the wrong restaurant when one facility ID was a suffix of another, and was case-sensitive against facility IDs embedded in a URL slug.
 - A restaurant opened via deep link outside the current score filter now appears in the sidebar list and results count, not just the map.
 - A search query itself could still silently truncate results at very high match counts, since search re-used the same 1,000-row limit as the unscoped browse query; search now gets its own, much higher cap.
+- The dark mode theme toggle's sun/moon icon was slightly off-center in its circle button.
+- The brand logo (a transparent PNG with dark artwork) visually disappeared against the dark mode background; given a light backdrop chip in dark mode.

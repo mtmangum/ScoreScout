@@ -32,7 +32,7 @@ const streetTiles = {
 }
 
 function scorePin(score: number, selected: boolean) {
-  const size = selected ? 56 : 48
+  const size = selected ? 42 : 34
   return divIcon({
     className: 'score-pin-wrapper',
     html: `<div class="map-score-pin ${scoreTone(score)} ${selected ? 'selected' : ''}"><span>${score}</span></div>`,
@@ -43,7 +43,7 @@ function scorePin(score: number, selected: boolean) {
 
 function clusterPin(count: number, worstScore: number) {
   // No count label: a number on a colored circle reads as a score, not a count.
-  const size = count >= 100 ? 60 : count >= 25 ? 52 : 44
+  const size = count >= 100 ? 45 : count >= 25 ? 39 : 33
   return divIcon({
     className: 'cluster-pin-wrapper',
     html: `<div class="map-cluster-pin ${scoreTone(worstScore)}"></div>`,

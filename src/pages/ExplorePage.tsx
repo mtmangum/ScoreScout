@@ -73,7 +73,7 @@ export function ExplorePage() {
           <img className="brand-mark" src={scoreScoutLogo} alt="" />
           <div><strong>ScoreScout</strong><small>Austin inspection explorer</small></div>
           <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            {theme === 'dark' ? '☀' : '☾'}
+            <span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
           </button>
         </header>
         <div className="filters">

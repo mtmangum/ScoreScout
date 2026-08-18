@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { MapView } from '../components/MapView'
 import { RestaurantDetail } from '../components/RestaurantDetail'
 import { RestaurantList } from '../components/RestaurantList'
-import { restaurants } from '../data/restaurants'
+import { useRestaurants } from '../hooks/useRestaurants'
 import scoreScoutLogo from '../assets/scorescout-logo.png'
 
 function slugify(value: string) {
@@ -17,6 +17,7 @@ function slugify(value: string) {
 
 export function ExplorePage() {
   const navigate = useNavigate()
+  const { restaurants, source, loading } = useRestaurants()
   const { facilityId, restaurantKey, cityCode } = useParams<{ facilityId: string; restaurantKey: string; cityCode: string }>()
   const [query, setQuery] = useState('')
   const [scoreMinimum, setScoreMinimum] = useState(50)
@@ -27,7 +28,7 @@ export function ExplorePage() {
       restaurant.profile.score >= scoreMinimum && restaurant.profile.score <= scoreMaximum &&
       (!normalized || `${restaurant.name} ${restaurant.address}`.toLowerCase().includes(normalized)),
     )
-  }, [query, scoreMinimum, scoreMaximum])
+  }, [restaurants, query, scoreMinimum, scoreMaximum])
   const selected = useMemo(() => {
     const normalizedFacilityId = facilityId?.toUpperCase()
     if (normalizedFacilityId) {
@@ -51,7 +52,7 @@ export function ExplorePage() {
       if (byLegacyKey) return byLegacyKey
     }
     return null
-  }, [facilityId, cityCode, restaurantKey])
+  }, [restaurants, facilityId, cityCode, restaurantKey])
   const selectedId = selected?.id ?? null
   const visibleRestaurants = selected && !filtered.some(({ id }) => id === selected.id)
     ? [...filtered, selected]
@@ -80,7 +81,7 @@ export function ExplorePage() {
             </div>
           </div>
         </div>
-        <div className="results-heading"><strong>{visibleRestaurants.length} places</strong><span>Fixture preview</span></div>
+        <div className="results-heading"><strong>{visibleRestaurants.length} places</strong><span>{loading ? 'Loading…' : source === 'live' ? 'Live Austin data' : 'Fixture preview'}</span></div>
         <RestaurantList restaurants={visibleRestaurants} selectedId={selectedId} onSelect={selectRestaurant} />
         <footer>
           <details>
@@ -88,7 +89,7 @@ export function ExplorePage() {
             <p>Inspection results are snapshots of conditions observed by Austin Public Health. The profile summarizes available history and is not an independent food-safety determination.</p>
             <p>Community ratings reflect customer sentiment and are separate from official inspections. Preview ratings are fixture data until Google Places is connected.</p>
           </details>
-          <span>Data source: City of Austin · Scores are not live yet</span>
+          <span>{source === 'live' ? 'Data source: City of Austin' : 'Data source: fixture preview · Scores are not live yet'}</span>
         </footer>
       </section>
       <section className="map-region"><MapView restaurants={visibleRestaurants} selectedId={selectedId} onSelect={selectRestaurant} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>

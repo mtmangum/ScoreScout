@@ -10,6 +10,18 @@ Routine inspections are point-in-time snapshots. ScoreScout summarizes available
 
 [City of Austin Food Establishment Inspection Scores](https://data.austintexas.gov/Health-and-Community-Services/Food-Establishment-Inspection-Scores/ecmv-9xxi), keyed by `facility_id`.
 
+The frontend uses `/api/restaurants` when the Supabase environment is configured and falls back to local fixture data during setup.
+
+## Live data setup
+
+1. Create a Supabase project and run `supabase/migrations/202608170001_initial_schema.sql` in its SQL editor.
+2. Add `SUPABASE_URL` and `SUPABASE_SECRET_KEY` in Netlify environment variables. Use a modern `sb_secret_…` key and never expose it in browser code or source control.
+3. Deploy, then run the `import-austin` scheduled function once from Netlify's Functions page.
+4. Add `GOOGLE_PLACES_API_KEY` and a random `IMPORT_SECRET` in Netlify.
+5. Invoke the protected `/api/enrich-google-places?limit=50` background function with `Authorization: Bearer <IMPORT_SECRET>` until the initial location backlog is complete.
+
+The Google enrichment function only accepts matches at or above the configured confidence threshold. Uncertain matches remain without coordinates for manual review and do not appear on the map.
+
 ## Tech stack
 
 - React + Vite + TypeScript
@@ -48,7 +60,12 @@ See [austin-score-scout-implementation.md](austin-score-scout-implementation.md)
 
 ## Deployment
 
-`vercel.json` rewrites all paths to `index.html` so client-side routes (including deep links to a restaurant) resolve correctly on a direct load or refresh.
+Netlify deployment is configured in `netlify.toml`:
+
+- Build command: `npm run build`
+- Publish directory: `dist`
+- Functions directory: `netlify/functions`
+- SPA rewrite to `index.html` so restaurant deep links resolve on refresh
 
 ## Status
 

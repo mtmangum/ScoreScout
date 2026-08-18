@@ -68,9 +68,9 @@ Do not reset, checkout, overwrite, or otherwise discard unrelated working-tree c
 
 The left list supports:
 
-- Highest score (default)
+- Newest inspection (default)
+- Highest score
 - Lowest score
-- Newest inspection
 - Name A–Z
 
 Alphabetical name order breaks score/date ties.
@@ -102,6 +102,7 @@ Alphabetical name order breaks score/date ties.
 - Desktop selection pans the map to compensate for the right-side detail panel.
 - Basemap control is a three-way Map/Satellite/Hybrid switcher (top-right of the map). Satellite and Hybrid use Esri World Imagery; Hybrid layers Esri's boundary/place-labels reference tiles on top.
 - Zoom controls are currently disabled.
+- `MapResize` (in `MapView.tsx`) attaches a `ResizeObserver` to the Leaflet container and calls `map.invalidateSize()` on every resize. Leaflet caches its container's pixel size at creation time and never notices later layout changes on its own (sidebar reflow, fonts loading async, breakpoint changes) — without this, tiles could be requested for a stale viewport and only partially load. Verified by comparing Leaflet's own `map.getSize()` against the container's actual `getBoundingClientRect()` after resizing across the mobile breakpoint — stays in sync now.
 - Client-side marker clustering (`supercluster`, MIT-licensed, no React/Leaflet peer-dependency coupling) groups nearby restaurants into circular bubbles colored by the worst (lowest) score inside the cluster, using the same green/amber/red bands as individual pins. Bubbles carry **no count number** — a digit on a colored circle reads as a score, not a count; the circular shape (vs. individual pins' teardrop shape) is the only "this is a group" signal. Clusters split into sub-clusters and eventually individual pins as you zoom in or click a cluster (`getClusterExpansionZoom`); implementation in `src/components/MapView.tsx` (`ClusterMarkers`, `useRestaurantClusterIndex`). `clusterRadius`/`clusterMaxZoom` constants control density/threshold. Selecting a restaurant buried in a cluster uses `map.flyTo()` (not `setView`) so a large zoom jump eases smoothly rather than snapping — a plain `setView` felt disorienting for jumps of several zoom levels.
 - Single basemap only — the Map/Satellite/Hybrid toggle was tried and then explicitly removed at the user's request. Don't reintroduce a basemap switcher without asking first.
 - Closing the detail panel does **not** recenter the map back to `defaultCenter` — that used to happen and was removed because it was disorienting when zoomed in. `SelectionPan` only reacts to a restaurant becoming selected now; it deliberately no-ops on deselect.

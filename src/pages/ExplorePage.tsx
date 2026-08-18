@@ -29,7 +29,7 @@ export function ExplorePage() {
   const { facilityId, restaurantKey, cityCode } = useParams<{ facilityId: string; restaurantKey: string; cityCode: string }>()
   const [scoreMinimum, setScoreMinimum] = useState(50)
   const [scoreMaximum, setScoreMaximum] = useState(100)
-  const [sortBy, setSortBy] = useState<RestaurantSort>('score-desc')
+  const [sortBy, setSortBy] = useState<RestaurantSort>('inspection-desc')
   const [showFavorites, setShowFavorites] = useState(false)
   // Search itself is server-side (see useRestaurants) since the API caps at 1,000
   // unordered rows and the full dataset is larger than that; only score/favorites

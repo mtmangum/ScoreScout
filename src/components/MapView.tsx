@@ -112,6 +112,21 @@ function SelectionPan({ restaurant, index }: { restaurant?: Restaurant; index: R
   return null
 }
 
+// Leaflet caches its container's pixel size at creation time and has no built-in
+// way to notice later layout changes (sidebar reflow, panel open/close, fonts
+// loading async). Without this, the map can keep requesting tiles for a stale
+// viewport size, showing up as tiles that only partially load.
+function MapResize() {
+  const map = useMap()
+  useEffect(() => {
+    const container = map.getContainer()
+    const observer = new ResizeObserver(() => map.invalidateSize())
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [map])
+  return null
+}
+
 function ClusterMarkers({ index, restaurantsById, selectedId, onSelect }: {
   index: RestaurantCluster
   restaurantsById: Map<string, Restaurant>
@@ -173,6 +188,7 @@ export function MapView({ restaurants, selectedId, onSelect }: MapViewProps) {
   return (
     <MapContainer center={defaultCenter} zoom={12} className="map" zoomControl={false}>
       <TileLayer attribution={streetTiles.attribution} url={streetTiles.url} />
+      <MapResize />
       {/* Must mount before SelectionPan: a large programmatic zoom fires Leaflet's
           moveend synchronously, so ClusterMarkers' listener has to already be
           subscribed (sibling effects run in JSX order) or it misses the event

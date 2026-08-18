@@ -44,3 +44,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Map tiles could partially load: Leaflet never noticed the map container resizing (sidebar reflow, fonts loading, breakpoint changes) and kept rendering against a stale viewport size. Now watched with a `ResizeObserver` that calls `invalidateSize()`.
 - The dark mode theme toggle's sun/moon icon was slightly off-center in its circle button.
 - The brand logo (a transparent PNG with dark artwork) visually disappeared against the dark mode background; given a light backdrop chip in dark mode.
+- The favicon had the same invisible-in-dark-tab-bar problem as the logo, plus `/favicon.ico` was silently returning the app's HTML instead of an icon (caught by the SPA rewrite, since no file actually existed at that path). Regenerated `favicon.ico`/`favicon.png`/`apple-touch-icon.png` with a solid backdrop so they're visible in any browser theme.

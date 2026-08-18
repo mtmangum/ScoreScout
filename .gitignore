@@ -9,3 +9,7 @@ dist
 
 # Local Supabase project link metadata
 supabase/.temp
+
+# Local agent/session notes
+PROJECT_STATE.md
+AGENTS.md

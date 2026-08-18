@@ -1,0 +1,295 @@
+# ScoreScout — Current State and Agent Handoff
+
+Last updated: 2026-08-17 (America/Chicago)
+
+This document is the current operational handoff for ScoreScout. Read it before changing the product, data pipeline, Supabase schema, or Netlify configuration. Update it whenever behavior, infrastructure, or known constraints materially change.
+
+## Product summary
+
+ScoreScout is a map-first explorer for Austin-area food-establishment inspections. It combines:
+
+- The latest official Austin Public Health inspection score.
+- A derived, explainable Inspection History Profile based on recent official scores.
+- Google Places community ratings when a high-confidence match exists.
+- Search, score filtering, sorting, shareable detail routes, and browser-local favorites.
+
+Do not describe the profile as a food-safety verdict or independently claim that a restaurant is safe, clean, unsafe, or dirty. Inspections are point-in-time observations.
+
+## Production services
+
+- Website: <https://www.scorescout.org>
+- Netlify site name: `scorescout`
+- Netlify site ID: `ef9c25ab-7069-4d35-8e85-7333cf418a3f`
+- Supabase project: `scorescout-production`
+- Supabase project ref: `luvttiuwntsvdlkpolup`
+- Primary branch: `main`
+- Repository deployment: pushing `main` triggers the production Netlify deploy.
+
+Netlify CLI and Supabase CLI are installed, authenticated, and linked to this workspace. Prefer their CLIs over their web dashboards when the CLI supports the task.
+
+Never place secret values in source control, Markdown, chat, screenshots, commands that echo them, or logs.
+
+## Repository state at this handoff
+
+- `main` and `origin/main` point to commit `e1e99c3` (`Add satellite basemap toggle to the map`).
+- There are intentional, uncommitted edits in:
+  - `src/components/MapView.tsx`
+  - `src/styles/index.css`
+- Those edits expand the committed Map/Satellite toggle into Map/Satellite/Hybrid controls. Preserve them unless the user explicitly asks to discard or replace them.
+
+Before editing, always run:
+
+```bash
+git status --short --branch
+git diff -- <files you plan to touch>
+```
+
+Do not reset, checkout, overwrite, or otherwise discard unrelated working-tree changes.
+
+## Current frontend functionality
+
+### Explorer layout
+
+- Desktop uses a fixed left sidebar and a full-height Leaflet map.
+- The sidebar flows directly from the ScoreScout brand header into search, score filtering, results, and the data disclosure footer.
+- The earlier introductory marketing block was removed to maximize result-list space.
+- Mobile uses the map in the upper portion and the sidebar/results below it. The full desktop brand header is currently hidden below 800 px.
+
+### Search and filtering
+
+- Search matches restaurant/facility name and address client-side.
+- The dual range control filters Inspection History Profile scores from 50 through 100.
+- Slider handles use a neutral dark brand color; the active track remains score-colored.
+- A selected deep-linked restaurant is kept visible even when outside the active filter.
+
+### Sorting
+
+The left list supports:
+
+- Highest score (default)
+- Lowest score
+- Newest inspection
+- Name A–Z
+
+Alphabetical name order breaks score/date ties.
+
+### Favorites
+
+- A star is available on every list row and in the restaurant detail panel.
+- Favorite IDs persist in browser `localStorage` under `scorescout-favorite-restaurants`.
+- Favorites do not require an account and do not sync between browsers/devices.
+- In the normal results view, favorites appear in a fixed saved section that does not move when the regular-result list scrolls.
+- The fixed section is height-capped and becomes independently scrollable when many items are saved.
+- The star counter can switch to a saved-only view; that view scrolls normally.
+- Saved and unsaved groups preserve the selected sort order internally.
+
+### Map
+
+- Leaflet with React-Leaflet.
+- Default center: Austin (`30.2747, -97.7404`), zoom 12.
+- Score markers use green for 90–100, amber for 70–89, and red below 70.
+- Selecting a marker opens the detail route/panel and enlarges the marker.
+- Desktop selection pans the map to compensate for the right-side detail panel.
+- Committed production behavior includes Map and Esri Satellite basemaps.
+- Current uncommitted work adds an Esri Hybrid mode with boundary/place labels.
+- Zoom controls are currently disabled.
+- Marker clustering and viewport-based loading are not implemented.
+
+### Restaurant details
+
+- Shareable routes are supported by `src/App.tsx`, including the canonical `/:cityCode/:restaurantKey` route and legacy formats.
+- The detail panel shows:
+  - Restaurant/facility name and address
+  - Save/favorite control
+  - Inspection History Profile
+  - Latest official inspection score and date
+  - Confidence and available inspection count
+  - Google community rating and source link, when available
+  - Recent official score chart
+  - Deterministic explanation of the profile calculation
+  - Link to the official City of Austin source
+
+### Live-data fallback
+
+- `useRestaurants` requests `/api/restaurants`.
+- If live loading fails or returns no rows, the UI retains local fixture data.
+- User-facing fallback copy says `Showing sample data` and `Live data unavailable · Sample restaurants shown`; do not reintroduce the developer term “fixture” in user-facing UI.
+
+## Data and backend state
+
+### Official Austin source
+
+Source: <https://data.austintexas.gov/Health-and-Community-Services/Food-Establishment-Inspection-Scores/ecmv-9xxi>
+
+The source contains individual inspections from roughly the latest three years. It represents food establishments, not only consumer-facing restaurants; schools, grocery/prepared-food departments, convenience stores, hospitals, care facilities, and other permitted operations are included.
+
+Last checked on 2026-08-17:
+
+- Official API: 6,518 distinct facilities and 20,964 inspection rows.
+- Most recent completed ScoreScout import: 6,511 facilities and 20,911 inspection rows.
+
+The dataset does not contain a reliable establishment-type field. A classification step is required before claiming that all imported facilities are restaurants.
+
+### Why production currently shows only a small subset
+
+`netlify/functions/restaurants.mts` requests rows from `restaurant_explorer` with both `latitude` and `longitude` required and a hard limit of 1,000. The Austin inspection source does not supply coordinates. Coordinates are currently added only when the Google Places enrichment accepts a match, and that same step writes the community rating.
+
+Therefore, the public API currently exposes only successfully Google-matched/geocoded facilities. On the last verification it returned 17 rows, and all 17 had Google ratings. This is not the expected final inventory; the underlying import contains about 6,500 facilities.
+
+The next architecture decision should be one of:
+
+1. Complete/cost-control Google enrichment for the intended inventory.
+2. Add a separate lower-cost geocoding pipeline and treat Google community ratings as optional enrichment.
+3. Split list and map queries so ungeocoded facilities can still be searched/listed.
+
+Do not simply remove the coordinate filter and pass null coordinates into `MapView`.
+
+## Server functions
+
+### `GET /api/restaurants`
+
+File: `netlify/functions/restaurants.mts`
+
+- Reads the `restaurant_explorer` Supabase view.
+- Requires non-null latitude and longitude.
+- Limits the query to 1,000 rows.
+- Returns profiles, five recent inspections, and optional Google community ratings.
+- Uses `Cache-Control: public, max-age=60, s-maxage=300`.
+
+### Austin import
+
+File: `netlify/functions/import-austin.mts`
+
+- Scheduled daily at `0 7 * * *` UTC.
+- Fetches the Socrata dataset in 5,000-row pages.
+- Upserts restaurants by `facility_id`.
+- Inserts inspections idempotently using a derived `source_row_id`.
+- Recalculates profiles using algorithm version `v1`.
+- Records successful runs in `data_sources`.
+
+### Google Places enrichment
+
+File: `netlify/functions/enrich-google-places-background.mts`
+
+- Protected by `Authorization: Bearer <IMPORT_SECRET>`.
+- Accepts `limit` from 1 through 100 and an `after` route-number cursor.
+- Selects restaurants with missing coordinates.
+- Searches Google Places (New), scores name/address/location similarity, and accepts only confidence `>= 0.85`.
+- Accepted matches update coordinates and upsert a Google Places community rating.
+- Rejected/uncertain matches are logged for review and remain without coordinates.
+- Matching code and tests live in `scripts/lib/googlePlaces.ts` and `scripts/lib/googlePlaces.test.ts`.
+
+Recent controlled enrichment used about 120 Google calls and produced 17 accepted matches. Many plausible matches scored around `0.78`; tune matching carefully before scaling. Google Places usage can incur cost. Do not run large enrichment batches or exceed the agreed free allowance without explicit user approval.
+
+## Inspection History Profile v1
+
+Implementation: `src/features/restaurants/score.ts`
+
+- Uses up to four newest scores.
+- Recency weights: 50%, 30%, 15%, 5%, renormalized for shorter histories.
+- Consistency adjustment: negative, capped at -5.
+- Trend adjustment: capped to ±3.
+- Final score is clamped to 0–100 and rounded.
+- Confidence:
+  - 1 inspection: Limited
+  - 2: Moderate
+  - 3–4: Good
+  - 5+: High
+
+## Supabase schema
+
+Initial migration: `supabase/migrations/202608170001_initial_schema.sql`
+
+Main objects:
+
+- `restaurants`
+- `inspections`
+- `inspection_profiles`
+- `community_ratings`
+- `data_sources`
+- `set_restaurant_location()` trigger function
+- `restaurant_explorer` security-invoker view
+
+PostGIS stores restaurant locations as geography points. Public read-only RLS policies exist on the four user-facing tables. Anonymous/authenticated roles receive select access to those tables and `restaurant_explorer`. Server-side writes use the Supabase secret key.
+
+## Environment variables
+
+Required Netlify server variables:
+
+- `SUPABASE_URL`
+- `SUPABASE_SECRET_KEY`
+- `GOOGLE_PLACES_API_KEY`
+- `IMPORT_SECRET`
+
+All key/secret values are already managed outside source control. Treat the Google key, Supabase secret key, and import secret as secrets. Public Supabase URL/publishable values may exist locally, but the current browser app uses the Netlify API rather than connecting directly to Supabase.
+
+## Local commands
+
+```bash
+npm install
+npm run dev
+npm run build
+npm run lint
+npm test
+```
+
+Before committing application changes, run at minimum:
+
+```bash
+npm run build
+npm run lint
+npm test
+git diff --check
+```
+
+Recent baseline: 2 Vitest files, 10 tests passing.
+
+## Known UX and technical issues
+
+Highest priority:
+
+1. Production list/map only exposes geocoded Google matches rather than the full imported inventory.
+2. Thousands of facilities require clustering, viewport queries, or both; rendering every marker is not viable.
+3. The source needs classification so schools, stores, hospitals, and other facilities are not presented indiscriminately as restaurants.
+4. Amber text/markers have insufficient contrast in some contexts and should be darkened.
+5. Search removes the native focus outline without a replacement; consistent `:focus-visible` styling is needed.
+6. The detail panel behaves like a modal but lacks dialog semantics, focus management, Escape handling, and focus restoration.
+7. Mobile hides the ScoreScout brand and needs a better map/list navigation pattern.
+8. Favorites are browser-local only; account-backed synchronization would require authentication and a user-favorites table.
+9. The API hard limit is 1,000 and there is no pagination or viewport query.
+10. The README and older implementation handoff contain some early-stack recommendations that no longer reflect the deployed Netlify/Supabase implementation; use this document as the current source of truth.
+
+## Recent product decisions
+
+- Prefer Netlify CLI and Supabase CLI over their dashboards.
+- Keep the sidebar focused on utility; the redundant intro/marketing block was removed.
+- Use plain-language `sample data`, never user-facing `fixture preview`.
+- Slider handles are neutral; score meaning stays on the active track and score elements.
+- Favorites should remain visible while regular results scroll.
+- Google Places matching must favor avoiding false matches over maximizing coverage.
+- Ask before materially increasing Google Places usage/cost.
+
+## Recent commits
+
+```text
+e1e99c3 Add satellite basemap toggle to the map
+e546366 Keep saved restaurants visible while scrolling
+84bbe3b Pin saved restaurants to top
+ff5361b Add saved restaurant favorites
+ffddce9 Add restaurant list sorting
+0d7dba3 Remove redundant explorer introduction
+94e452f Tighten explorer introduction
+6c65251 Use neutral score range handles
+```
+
+## Agent handoff checklist
+
+When continuing work:
+
+1. Read this document and `README.md`.
+2. Inspect `git status` and preserve other agents’/the user’s edits.
+3. Recheck live counts instead of assuming the last recorded values are current.
+4. Never reveal or log secret values.
+5. Use CLI workflows by default.
+6. Test changes proportionally; run build, lint, and tests before commit/push.
+7. Update this document when current behavior or operational state changes.

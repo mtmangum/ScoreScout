@@ -58,6 +58,8 @@ scripts/            data import / profile calculation jobs
 
 See [austin-score-scout-implementation.md](austin-score-scout-implementation.md) for the full implementation handoff, including the scoring contract, database model, and build sequence.
 
+Agents and maintainers should read [docs/current-state.md](docs/current-state.md) first for the current deployed functionality, infrastructure state, active work, known issues, and operational guardrails.
+
 ## Deployment
 
 Netlify deployment is configured in `netlify.toml`:

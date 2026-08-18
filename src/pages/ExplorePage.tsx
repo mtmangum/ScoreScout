@@ -109,7 +109,7 @@ export function ExplorePage() {
             </select>
           </div>
         </div>
-        <RestaurantList restaurants={sortedRestaurants} selectedId={selectedId} favoriteIds={favoriteIds} onSelect={selectRestaurant} onToggleFavorite={toggleFavorite} />
+        <RestaurantList restaurants={sortedRestaurants} selectedId={selectedId} favoriteIds={favoriteIds} favoritesOnly={showFavorites} onSelect={selectRestaurant} onToggleFavorite={toggleFavorite} />
         <footer>
           <details>
             <summary>About scores &amp; data</summary>

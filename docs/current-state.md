@@ -31,7 +31,7 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to commit `91f6eab` (`Shrink map pins/clusters, fix theme-toggle icon and dark-mode logo`).
+- `main` and `origin/main` point to commit `dd8ad5a` (`Fix map tiles partially loading, default sort to newest inspection`).
 - The Census geocoding backfill (see "Why production currently shows only a small subset" above) has finished; check current match counts before assuming the numbers there are still current.
 - No known uncommitted work is pending as of this handoff.
 - All three migrations (`202608170001_initial_schema.sql`, `202608172200_geocoding_views.sql`, `202608180001_fix_route_id_truncation.sql`) **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track any of them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows all as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).

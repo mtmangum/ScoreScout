@@ -34,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Shrunk map pins and cluster bubbles so they take up less of the map.
 - Restaurant list now defaults to newest inspection first (was highest score first).
 - Increased the map clustering radius (tuned against real production data) so the default view groups nearby restaurants more aggressively, cutting on-screen markers from 233 to 140 at the default zoom.
+- Narrowed the map's default view (zoom 12 → 15) so the first impression is mostly individual, readable score pins rather than mostly cluster bubbles — real restaurant volume meant no clustering radius alone could achieve that at a whole-metro zoom.
 
 ### Fixed
 

@@ -186,7 +186,7 @@ export function MapView({ restaurants, selectedId, onSelect }: MapViewProps) {
   const clusterIndex = useRestaurantClusterIndex(restaurants)
   const restaurantsById = useMemo(() => new Map(restaurants.map((restaurant) => [restaurant.id, restaurant])), [restaurants])
   return (
-    <MapContainer center={defaultCenter} zoom={12} className="map" zoomControl={false}>
+    <MapContainer center={defaultCenter} zoom={15} className="map" zoomControl={false}>
       <TileLayer attribution={streetTiles.attribution} url={streetTiles.url} />
       <MapResize />
       {/* Must mount before SelectionPan: a large programmatic zoom fires Leaflet's

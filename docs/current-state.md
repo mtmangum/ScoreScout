@@ -1,6 +1,6 @@
 # ScoreScout — Current State and Agent Handoff
 
-Last updated: 2026-08-17 (America/Chicago), Claude session
+Last updated: 2026-08-18 (America/Chicago), 1.0.0 release
 
 This document is the current operational handoff for ScoreScout. Read it before changing the product, data pipeline, Supabase schema, or Netlify configuration. Update it whenever behavior, infrastructure, or known constraints materially change.
 
@@ -31,7 +31,7 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to commit `6772a80` (`Mobile: full-height map/list toggle, pinned search, locate-me button`).
+- `main` and `origin/main` point to the ScoreScout 1.0.0 release after the release commit is pushed.
 - The Census geocoding backfill (see "Why production currently shows only a small subset" above) has finished; check current match counts before assuming the numbers there are still current.
 - No known uncommitted work is pending as of this handoff.
 - All three migrations (`202608170001_initial_schema.sql`, `202608172200_geocoding_views.sql`, `202608180001_fix_route_id_truncation.sql`) **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track any of them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows all as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
@@ -53,9 +53,9 @@ Do not reset, checkout, overwrite, or otherwise discard unrelated working-tree c
 - Desktop uses a fixed left sidebar and a full-height Leaflet map.
 - The sidebar flows directly from the ScoreScout brand header into search, score filtering, results, and the data disclosure footer.
 - The earlier introductory marketing block was removed to maximize result-list space.
-- Mobile (below 800px) no longer splits the screen 53/47 between map and list. A persistent `.mobile-toolbar` (search input + Map/List segmented toggle, driven by `ExplorePage`'s `mobileView` state, reflected as `data-mobile-view` on `.app-shell`) sits above full-height Map or List views — only one is visible at a time (`display:none` on the other via `[data-mobile-view="…"]` CSS), giving each mode the whole remaining viewport instead of the old fixed 47vh list cap. The score-range filter and saved/sort controls still live inside the list view only (not surfaced in Map mode) — a deliberate v1 simplification; a future iteration could add a filter sheet reachable from Map mode too. The full desktop brand header is still hidden below 800px (unrelated to the toolbar, which is a separate element).
+- Mobile (below 800px) no longer splits the screen 53/47 between map and list. A compact `.mobile-header` keeps the logo, ScoreScout name, Austin context, and theme toggle visible; a persistent `.mobile-toolbar` beneath it provides search and the Map/List segmented toggle. `ExplorePage`'s `mobileView` state is reflected as `data-mobile-view` on `.app-shell`, and only the selected Map or List view is visible (`display:none` on the other), giving each mode the remaining viewport instead of the old fixed 47vh list cap. The score-range filter and saved/sort controls still live inside the list view only (not surfaced in Map mode) — a deliberate v1 simplification; a future iteration could add a filter sheet reachable from Map mode too. The full desktop sidebar header remains hidden below 800px because the compact mobile header replaces it.
 - Toggling `.map-region` between `display:none` and visible on mobile depends on the `MapResize` `ResizeObserver` (see above) to call `invalidateSize()` when it becomes visible again — verified working (tiles render correctly with no gaps after switching List → Map). If that resize-observer fix is ever removed, this toggle would likely break.
-- A "locate me" button (`LocateButton` in `MapView.tsx`, bottom-right of the map, visible on both desktop and mobile) uses `navigator.geolocation.getCurrentPosition` and `map.flyTo(...)`. Fails silently (button returns to idle state) if geolocation is unavailable or the user denies the permission prompt — no error UI beyond that today.
+- An accessible crosshair "locate me" button (`LocateButton` in `MapView.tsx`, bottom-right of the map, visible on both desktop and mobile) uses `navigator.geolocation.getCurrentPosition` and `map.flyTo(...)`. The icon pulses while locating and turns red with an unavailable label when geolocation is unsupported or denied.
 
 ### Search and filtering
 

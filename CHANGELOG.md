@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-18
+
 ### Added
 
 - Initial Vite + React + TypeScript project scaffold.
@@ -23,8 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Server-side search: the search box now queries the full restaurant dataset via the API's `q` parameter instead of only whatever single page of results was already loaded client-side.
 - Clear (×) button in the search box, shown once you've typed something.
 - Light/dark theme toggle (sidebar header), following system preference by default and persisting your choice.
-- Mobile: a Map/List toggle switches between full-height map and full-height list views instead of the old fixed 53/47 split, with a persistent search field pinned above both.
-- A "locate me" button on the map centers and zooms to your current location (desktop and mobile).
+- Mobile: a compact branded header plus a Map/List toggle switches between full-height map and full-height list views instead of the old fixed 53/47 split, with a persistent search field pinned above both.
+- An accessible "locate me" button on the map centers and zooms to your current location on desktop and mobile, with locating and unavailable states.
 
 ### Changed
 
@@ -36,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Shrunk map pins and cluster bubbles so they take up less of the map.
 - Restaurant list now defaults to newest inspection first (was highest score first).
 - Retuned map clustering (radius and default zoom, both verified against real production data) so most of the default view reads as individual, readable score pins rather than cluster bubbles, while still showing a real chunk of the city.
+- Replaced the map location glyph with a clearer crosshair icon and polished hover, focus, loading, and error feedback.
 
 ### Fixed
 

@@ -132,7 +132,10 @@ function LocateButton() {
   const [status, setStatus] = useState<'idle' | 'locating' | 'denied'>('idle')
 
   const handleClick = () => {
-    if (!navigator.geolocation) return
+    if (!navigator.geolocation) {
+      setStatus('denied')
+      return
+    }
     setStatus('locating')
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -147,13 +150,17 @@ function LocateButton() {
   return (
     <button
       type="button"
-      className="locate-button"
+      className={`locate-button ${status}`}
       onClick={handleClick}
       disabled={status === 'locating'}
       aria-label={status === 'denied' ? 'Location unavailable' : 'Go to my location'}
       title={status === 'denied' ? 'Location unavailable' : 'Go to my location'}
     >
-      <span aria-hidden="true">{status === 'locating' ? '…' : '◎'}</span>
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="6" />
+        <circle className="locate-button-dot" cx="12" cy="12" r="2" />
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+      </svg>
     </button>
   )
 }

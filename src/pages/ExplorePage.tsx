@@ -12,6 +12,23 @@ import scoreScoutLogo from '../assets/scorescout-logo.png'
 type RestaurantSort = 'score-desc' | 'score-asc' | 'inspection-desc' | 'name-asc'
 type MobileView = 'map' | 'list'
 
+function ThemeIcon({ theme }: { theme: 'light' | 'dark' }) {
+  if (theme === 'dark') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M20.4 15.4A8.5 8.5 0 0 1 8.6 3.6a8.5 8.5 0 1 0 11.8 11.8Z" />
+    </svg>
+  )
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -70,6 +87,13 @@ export function ExplorePage() {
 
   return (
     <main className="app-shell" data-mobile-view={mobileView}>
+      <header className="mobile-header">
+        <img className="brand-mark" src={scoreScoutLogo} alt="" />
+        <div className="mobile-brand-copy"><strong>ScoreScout</strong><small>Austin inspection explorer</small></div>
+        <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+          <ThemeIcon theme={theme} />
+        </button>
+      </header>
       <div className="mobile-toolbar">
         <label className="search">
           <span>⌕</span>
@@ -86,7 +110,7 @@ export function ExplorePage() {
           <img className="brand-mark" src={scoreScoutLogo} alt="" />
           <div><strong>ScoreScout</strong><small>Austin inspection explorer</small></div>
           <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
+            <ThemeIcon theme={theme} />
           </button>
         </header>
         <div className="filters">

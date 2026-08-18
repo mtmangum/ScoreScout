@@ -23,7 +23,7 @@ interface ClusterAggregateProps {
 type RestaurantCluster = Supercluster<RestaurantPointProps, ClusterAggregateProps>
 
 const defaultCenter: [number, number] = [30.2747, -97.7404]
-const clusterRadius = 100
+const clusterRadius = 15
 const clusterMaxZoom = 16
 
 const streetTiles = {
@@ -186,7 +186,7 @@ export function MapView({ restaurants, selectedId, onSelect }: MapViewProps) {
   const clusterIndex = useRestaurantClusterIndex(restaurants)
   const restaurantsById = useMemo(() => new Map(restaurants.map((restaurant) => [restaurant.id, restaurant])), [restaurants])
   return (
-    <MapContainer center={defaultCenter} zoom={15} className="map" zoomControl={false}>
+    <MapContainer center={defaultCenter} zoom={12.5} className="map" zoomControl={false}>
       <TileLayer attribution={streetTiles.attribution} url={streetTiles.url} />
       <MapResize />
       {/* Must mount before SelectionPan: a large programmatic zoom fires Leaflet's

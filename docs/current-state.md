@@ -31,7 +31,7 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to commit `f621203` (`Add score-aware marker clustering to the map`).
+- `main` and `origin/main` point to commit `7f0a814` (`Fix wrong-restaurant clicks, remove cluster count labels, ease big zooms`).
 - No known uncommitted work is pending as of this handoff.
 - All three migrations (`202608170001_initial_schema.sql`, `202608172200_geocoding_views.sql`, `202608180001_fix_route_id_truncation.sql`) **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track any of them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows all as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
 - A one-off Census geocoding backfill script (not committed — it duplicates `geocode-census-background.mts`'s logic but runs synchronously from the agent's shell using the production `SUPABASE_URL`/`SUPABASE_SECRET_KEY` pulled via `netlify env:get`, since Netlify's `-background` functions return `202` with an empty body immediately, making progress untrackable from the HTTP response alone) was started against the ~6,494-restaurant backlog. Check whether it has finished; if still running, do not start a second copy — it would double up on Census requests and race PATCH writes to the same rows.
@@ -298,6 +298,7 @@ Highest priority:
 ## Recent commits
 
 ```text
+7f0a814 Fix wrong-restaurant clicks, remove cluster count labels, ease big zooms
 f621203 Add score-aware marker clustering to the map
 b7c5c39 Remove save button from the restaurant detail panel
 7e1babb Decouple coordinate coverage from Google Places, add Census geocoding

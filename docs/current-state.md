@@ -56,7 +56,7 @@ Do not reset, checkout, overwrite, or otherwise discard unrelated working-tree c
 
 ### Search and filtering
 
-- Search matches restaurant/facility name and address client-side.
+- Search is server-side: `useRestaurants(searchQuery)` debounces (300ms) and re-fetches `/api/restaurants?q=<query>`, which searches the full table rather than the capped 1,000-row unordered snapshot the app otherwise loads. Fixes a real bug: a restaurant outside whatever arbitrary 1,000 rows the no-search fetch happened to return was invisible to search even though it matched, once the dataset grew past the cap. Score/favorites filtering still happens client-side on top of whatever `restaurants` the query returned.
 - The dual range control filters Inspection History Profile scores from 50 through 100.
 - Slider handles use a neutral dark brand color; the active track remains score-colored.
 - A selected deep-linked restaurant is kept visible even when outside the active filter.
@@ -92,6 +92,8 @@ Alphabetical name order breaks score/date ties.
 - Basemap control is a three-way Map/Satellite/Hybrid switcher (top-right of the map). Satellite and Hybrid use Esri World Imagery; Hybrid layers Esri's boundary/place-labels reference tiles on top.
 - Zoom controls are currently disabled.
 - Client-side marker clustering (`supercluster`, MIT-licensed, no React/Leaflet peer-dependency coupling) groups nearby restaurants into circular bubbles colored by the worst (lowest) score inside the cluster, using the same green/amber/red bands as individual pins. Bubbles carry **no count number** — a digit on a colored circle reads as a score, not a count; the circular shape (vs. individual pins' teardrop shape) is the only "this is a group" signal. Clusters split into sub-clusters and eventually individual pins as you zoom in or click a cluster (`getClusterExpansionZoom`); implementation in `src/components/MapView.tsx` (`ClusterMarkers`, `useRestaurantClusterIndex`). `clusterRadius`/`clusterMaxZoom` constants control density/threshold. Selecting a restaurant buried in a cluster uses `map.flyTo()` (not `setView`) so a large zoom jump eases smoothly rather than snapping — a plain `setView` felt disorienting for jumps of several zoom levels.
+- Single basemap only — the Map/Satellite/Hybrid toggle was tried and then explicitly removed at the user's request. Don't reintroduce a basemap switcher without asking first.
+- Closing the detail panel does **not** recenter the map back to `defaultCenter` — that used to happen and was removed because it was disorienting when zoomed in. `SelectionPan` only reacts to a restaurant becoming selected now; it deliberately no-ops on deselect.
 - Non-obvious ordering constraint: `<ClusterMarkers>` must mount before `<SelectionPan>` in the JSX. A large deep-link-driven zoom jump fires Leaflet's `moveend` synchronously inside `setView()`; sibling effects run in JSX order, so if `SelectionPan`'s effect (which calls `setView`) ran first, `ClusterMarkers`'s `moveend` listener wouldn't be subscribed yet and would miss the event, leaving stale clusters on screen. Verified with a production build (dev-mode React StrictMode's double-effect-invoke can mask/alter this race, so always retest ordering changes against `npm run build && vite preview`, not just `npm run dev`).
 - Viewport-based *data loading* (fetching only what's in view from the API) is still not implemented — clustering here only reduces rendered markers from whatever `restaurants` array the page already has in memory.
 
@@ -294,6 +296,8 @@ Highest priority:
 - Ask before materially increasing Google Places usage/cost.
 - Coordinate coverage comes from a free Census Bureau geocoder, not Google; Google Places is optional rating-only enrichment decoupled from map/list coverage.
 - Cluster bubbles are colored by worst-score-in-cluster (not a neutral count badge or averaged score) — deliberate choice for a health-inspection app to surface risk rather than hide it inside an average.
+- Keep the map to a single basemap; the satellite/hybrid toggle was removed at the user's request.
+- The map should not recenter itself when the user closes the detail panel.
 
 ## Recent commits
 

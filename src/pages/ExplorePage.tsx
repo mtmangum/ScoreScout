@@ -21,22 +21,23 @@ function slugify(value: string) {
 
 export function ExplorePage() {
   const navigate = useNavigate()
-  const { restaurants, source, loading } = useRestaurants()
+  const [query, setQuery] = useState('')
+  const { restaurants, source, loading } = useRestaurants(query)
   const { favoriteIds, toggleFavorite } = useFavorites()
   const { facilityId, restaurantKey, cityCode } = useParams<{ facilityId: string; restaurantKey: string; cityCode: string }>()
-  const [query, setQuery] = useState('')
   const [scoreMinimum, setScoreMinimum] = useState(50)
   const [scoreMaximum, setScoreMaximum] = useState(100)
   const [sortBy, setSortBy] = useState<RestaurantSort>('score-desc')
   const [showFavorites, setShowFavorites] = useState(false)
+  // Search itself is server-side (see useRestaurants) since the API caps at 1,000
+  // unordered rows and the full dataset is larger than that; only score/favorites
+  // filtering happens here, on top of whatever `restaurants` the query returned.
   const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
     return restaurants.filter((restaurant) =>
       restaurant.profile.score >= scoreMinimum && restaurant.profile.score <= scoreMaximum &&
-      (!showFavorites || favoriteIds.has(restaurant.id)) &&
-      (!normalized || `${restaurant.name} ${restaurant.address}`.toLowerCase().includes(normalized)),
+      (!showFavorites || favoriteIds.has(restaurant.id)),
     )
-  }, [restaurants, query, scoreMinimum, scoreMaximum, showFavorites, favoriteIds])
+  }, [restaurants, scoreMinimum, scoreMaximum, showFavorites, favoriteIds])
   const selected = useMemo(
     () => resolveSelectedRestaurant(restaurants, { facilityId, cityCode, restaurantKey }),
     [restaurants, facilityId, cityCode, restaurantKey],

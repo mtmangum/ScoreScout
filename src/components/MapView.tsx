@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { divIcon } from 'leaflet'
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import Supercluster from 'supercluster'
@@ -26,28 +26,10 @@ const defaultCenter: [number, number] = [30.2747, -97.7404]
 const clusterRadius = 60
 const clusterMaxZoom = 16
 
-type Basemap = 'street' | 'satellite' | 'hybrid'
-
 const streetTiles = {
   url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   attribution: '&copy; OpenStreetMap contributors',
 }
-
-const imageryTiles = {
-  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
-}
-
-const labelsOverlay = {
-  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-  attribution: 'Labels &copy; Esri',
-}
-
-const basemapOptions: Array<{ value: Basemap; label: string }> = [
-  { value: 'street', label: 'Map' },
-  { value: 'satellite', label: 'Satellite' },
-  { value: 'hybrid', label: 'Hybrid' },
-]
 
 function scorePin(score: number, selected: boolean) {
   const size = selected ? 56 : 48
@@ -104,31 +86,28 @@ function findExpansionZoom(map: ReturnType<typeof useMap>, index: RestaurantClus
   return isIndividual ? null : clusterMaxZoom + 1
 }
 
-function SelectionPan({ restaurant, selectedId, index }: { restaurant?: Restaurant; selectedId: string | null; index: RestaurantCluster }) {
+function SelectionPan({ restaurant, index }: { restaurant?: Restaurant; index: RestaurantCluster }) {
   const map = useMap()
-  const previousSelectedId = useRef<string | null>(null)
 
   useEffect(() => {
     const isMobile = window.matchMedia('(max-width: 800px)').matches
-    if (!isMobile && restaurant) {
-      const expansionZoom = findExpansionZoom(map, index, restaurant, map.getZoom())
-      const targetZoom = expansionZoom ?? map.getZoom()
-      const markerPoint = map.project([restaurant.latitude, restaurant.longitude], targetZoom)
-      const centerWithPanelOffset = markerPoint.add([205, 0])
-      const target = map.unproject(centerWithPanelOffset, targetZoom)
-      // flyTo eases through the pan+zoom as one smooth motion; a plain setView snaps
-      // large zoom jumps (e.g. revealing a restaurant buried in a cluster) too abruptly.
-      const zoomDelta = Math.abs(targetZoom - map.getZoom())
-      if (zoomDelta > 0.5) {
-        map.flyTo(target, targetZoom, { duration: Math.min(1.6, 0.6 + zoomDelta * 0.1) })
-      } else {
-        map.panTo(target, { animate: true, duration: 0.45 })
-      }
-    } else if (!isMobile && selectedId === null && previousSelectedId.current !== null) {
-      map.panTo(defaultCenter, { animate: true, duration: 0.45 })
+    if (isMobile || !restaurant) return
+    const expansionZoom = findExpansionZoom(map, index, restaurant, map.getZoom())
+    const targetZoom = expansionZoom ?? map.getZoom()
+    const markerPoint = map.project([restaurant.latitude, restaurant.longitude], targetZoom)
+    const centerWithPanelOffset = markerPoint.add([205, 0])
+    const target = map.unproject(centerWithPanelOffset, targetZoom)
+    // flyTo eases through the pan+zoom as one smooth motion; a plain setView snaps
+    // large zoom jumps (e.g. revealing a restaurant buried in a cluster) too abruptly.
+    const zoomDelta = Math.abs(targetZoom - map.getZoom())
+    if (zoomDelta > 0.5) {
+      map.flyTo(target, targetZoom, { duration: Math.min(1.6, 0.6 + zoomDelta * 0.1) })
+    } else {
+      map.panTo(target, { animate: true, duration: 0.45 })
     }
-    previousSelectedId.current = selectedId
-  }, [map, restaurant, selectedId, index])
+    // Deliberately does nothing on deselect: recentering the map when closing the
+    // detail panel was disorienting, especially when zoomed in.
+  }, [map, restaurant, index])
 
   return null
 }
@@ -189,36 +168,17 @@ function ClusterMarkers({ index, restaurantsById, selectedId, onSelect }: {
 
 export function MapView({ restaurants, selectedId, onSelect }: MapViewProps) {
   const selectedRestaurant = restaurants.find(({ id }) => id === selectedId)
-  const [basemap, setBasemap] = useState<Basemap>('street')
-  const base = basemap === 'street' ? streetTiles : imageryTiles
   const clusterIndex = useRestaurantClusterIndex(restaurants)
   const restaurantsById = useMemo(() => new Map(restaurants.map((restaurant) => [restaurant.id, restaurant])), [restaurants])
   return (
-    <>
-      <MapContainer center={defaultCenter} zoom={12} className={`map ${basemap}`} zoomControl={false}>
-        <TileLayer key={basemap === 'street' ? 'street' : 'imagery'} attribution={base.attribution} url={base.url} />
-        {basemap === 'hybrid' && (
-          <TileLayer key="labels" attribution={labelsOverlay.attribution} url={labelsOverlay.url} zIndex={2} />
-        )}
-        {/* Must mount before SelectionPan: a large programmatic zoom fires Leaflet's
-            moveend synchronously, so ClusterMarkers' listener has to already be
-            subscribed (sibling effects run in JSX order) or it misses the event
-            and never re-clusters for the new viewport. */}
-        <ClusterMarkers index={clusterIndex} restaurantsById={restaurantsById} selectedId={selectedId} onSelect={onSelect} />
-        <SelectionPan restaurant={selectedRestaurant} selectedId={selectedId} index={clusterIndex} />
-      </MapContainer>
-      <div className="basemap-toggle" role="group" aria-label="Map style">
-        {basemapOptions.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={option.value === basemap ? 'active' : undefined}
-            onClick={() => setBasemap(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </>
+    <MapContainer center={defaultCenter} zoom={12} className="map" zoomControl={false}>
+      <TileLayer attribution={streetTiles.attribution} url={streetTiles.url} />
+      {/* Must mount before SelectionPan: a large programmatic zoom fires Leaflet's
+          moveend synchronously, so ClusterMarkers' listener has to already be
+          subscribed (sibling effects run in JSX order) or it misses the event
+          and never re-clusters for the new viewport. */}
+      <ClusterMarkers index={clusterIndex} restaurantsById={restaurantsById} selectedId={selectedId} onSelect={onSelect} />
+      <SelectionPan restaurant={selectedRestaurant} index={clusterIndex} />
+    </MapContainer>
   )
 }

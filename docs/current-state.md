@@ -31,7 +31,7 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `main` and `origin/main` point to commit `b7c5c39` (`Remove save button from the restaurant detail panel`).
+- `main` and `origin/main` point to commit `f621203` (`Add score-aware marker clustering to the map`).
 - No known uncommitted work is pending as of this handoff.
 - The geocoding migration (`202608172200_geocoding_views.sql`) **has been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track either migration as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows both as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
 - A one-off Census geocoding backfill script (not committed — it duplicates `geocode-census-background.mts`'s logic but runs synchronously from the agent's shell using the production `SUPABASE_URL`/`SUPABASE_SECRET_KEY` pulled via `netlify env:get`, since Netlify's `-background` functions return `202` with an empty body immediately, making progress untrackable from the HTTP response alone) was started against the ~6,494-restaurant backlog. Check whether it has finished; if still running, do not start a second copy — it would double up on Census requests and race PATCH writes to the same rows.
@@ -292,6 +292,9 @@ Highest priority:
 ## Recent commits
 
 ```text
+f621203 Add score-aware marker clustering to the map
+b7c5c39 Remove save button from the restaurant detail panel
+7e1babb Decouple coordinate coverage from Google Places, add Census geocoding
 645f725 Add hybrid basemap mode, update handoff doc
 ed44dcc Ignore local agent notes (AGENTS.md, PROJECT_STATE.md)
 e1e99c3 Add satellite basemap toggle to the map
@@ -299,8 +302,6 @@ e546366 Keep saved restaurants visible while scrolling
 84bbe3b Pin saved restaurants to top
 ff5361b Add saved restaurant favorites
 ffddce9 Add restaurant list sorting
-0d7dba3 Remove redundant explorer introduction
-94e452f Tighten explorer introduction
 6c65251 Use neutral score range handles
 ```
 

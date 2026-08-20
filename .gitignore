@@ -16,3 +16,4 @@ deno.lock
 # Local agent/session notes
 PROJECT_STATE.md
 AGENTS.md
+CLOUDFLARE_MIGRATION.md

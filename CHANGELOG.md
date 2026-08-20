@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- Fixed direct restaurant links failing to open their detail card: the API param used to fetch a specific restaurant was silently dropped on older WebKit browsers (iOS Safari pre-17, Chrome on iOS), and even when present, the browse query's unordered 1,000-row cap could truncate the result before the requested restaurant was reached.
 - Kept saved restaurants permanently pinned until explicitly unchecked, independent of search, score filters, facility categories, or the API's 1,000-row browse page; existing ID-only favorites migrate to locally cached, API-refreshed snapshots.
 - Optimized canonical duplicate membership and alias search queries to avoid production statement timeouts, and made the duplicate-rule trigger safely idempotent.
 - Improved amber contrast by separating amber backgrounds from theme-aware amber text colors.

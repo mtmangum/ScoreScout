@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // could return the same row on two pages. See CHANGELOG.md "Replaced the
 // arbitrary 1,000-row browse cap...".
 const { supabaseRequest } = vi.hoisted(() => ({ supabaseRequest: vi.fn() }))
-vi.mock('./_shared/supabase.mts', () => ({ supabaseRequest }))
+vi.mock('../_shared/supabase.mts', () => ({ supabaseRequest }))
 
 interface FakeRow {
   id: string
@@ -118,7 +118,7 @@ beforeEach(() => {
 
 describe('GET /api/restaurants (browse/summary mode)', () => {
   it('returns every matching row exactly once across multiple Range-paginated pages', async () => {
-    const { default: handler } = await import('./restaurants.mts')
+    const { default: handler } = await import('../restaurants.mts')
     const response = await handler(new Request('http://localhost/api/restaurants'))
     const payload = await response.json() as { restaurants: Array<{ id: string }> }
 
@@ -128,7 +128,7 @@ describe('GET /api/restaurants (browse/summary mode)', () => {
   })
 
   it('returns the lightweight summary shape, not full inspection/profile detail', async () => {
-    const { default: handler } = await import('./restaurants.mts')
+    const { default: handler } = await import('../restaurants.mts')
     const response = await handler(new Request('http://localhost/api/restaurants'))
     const payload = await response.json() as { restaurants: Array<Record<string, unknown>> }
 
@@ -143,7 +143,7 @@ describe('GET /api/restaurants (browse/summary mode)', () => {
 
 describe('GET /api/restaurants?id=... (detail mode)', () => {
   it('returns the full record including inspections and profile breakdown', async () => {
-    const { default: handler } = await import('./restaurants.mts')
+    const { default: handler } = await import('../restaurants.mts')
     const response = await handler(new Request(`http://localhost/api/restaurants?id=${makeUuid(42)}`))
     const payload = await response.json() as { restaurants: Array<Record<string, unknown>> }
 
@@ -156,7 +156,7 @@ describe('GET /api/restaurants?id=... (detail mode)', () => {
 
 describe('GET /api/restaurants?ids=... (favorites batch mode)', () => {
   it('returns summary shape for exactly the requested ids', async () => {
-    const { default: handler } = await import('./restaurants.mts')
+    const { default: handler } = await import('../restaurants.mts')
     const ids = [makeUuid(10), makeUuid(20)]
     const response = await handler(new Request(`http://localhost/api/restaurants?ids=${ids.join(',')}`))
     const payload = await response.json() as { restaurants: Array<{ id: string }> }

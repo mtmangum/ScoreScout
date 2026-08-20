@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Default explorer requests now omit high-confidence school and healthcare facilities while preserving them through the opt-in filter and direct links.
 - Replaced the arbitrary 1,000-row browse cap with a complete, lightweight summary listing (paginated server-side via Supabase's Range headers past its 1,000-row max-rows setting) shared by the map and results list, plus a separate on-demand fetch for a restaurant's full record (inspection history, profile breakdown, community rating) once its card is opened. The map now shows every matching restaurant instead of an arbitrary subset, and list sorting/filtering operate over the full matching population.
-- Added a stable `id` tiebreaker to the browse query's sort order — needed once results were paginated across multiple requests, since rows tied on name alone aren't guaranteed the same order across separate query executions and could otherwise be duplicated or skipped at a page boundary. Added a regression test (`netlify/functions/restaurants.test.ts`) that simulates a production-scale, heavily-tied dataset to catch this class of bug without a live database connection.
+- Added a stable `id` tiebreaker to the browse query's sort order — needed once results were paginated across multiple requests, since rows tied on name alone aren't guaranteed the same order across separate query executions and could otherwise be duplicated or skipped at a page boundary. Added a regression test (`netlify/functions/_tests/restaurants.test.ts`) that simulates a production-scale, heavily-tied dataset to catch this class of bug without a live database connection.
 
 ### Fixed
 

@@ -60,7 +60,7 @@ export default async (request: Request) => {
     else if (!favoriteLookup && searchFilters.length) query.set('or', `(${searchFilters})`)
     const response = await supabaseRequest(`restaurant_explorer_classified?${query}`)
     const rows = await response.json() as ExplorerRow[]
-    const restaurants = rows.map((row) => ({
+    const toRestaurant = (row: ExplorerRow) => ({
       id: row.id,
       facilityId: row.facility_id,
       cityCode: row.city_code,
@@ -84,7 +84,24 @@ export default async (request: Request) => {
         sourceUrl: row.community_source_url, matchedAt: row.community_matched_at,
         refreshedAt: row.community_refreshed_at, matchConfidence: Number(row.community_match_confidence),
       } : undefined,
-    }))
+    })
+    let restaurants = rows.map(toRestaurant)
+    // The browse query's `or(...)` combines the target with a broad visibility filter
+    // (facility_category=other matches most of the table), so an unordered `limit`
+    // can truncate the result before the specifically-requested row is reached.
+    // Fetch it directly if it didn't make the cut, so deep links always resolve.
+    const targetMatches = (r: ReturnType<typeof toRestaurant>) =>
+      (targetRoute !== undefined && (r.routeId === targetRoute || r.routeAliases.includes(targetRoute))) ||
+      (targetFacility !== undefined && (r.facilityId === targetFacility || r.facilityAliases.includes(targetFacility)))
+    if ((targetRoute || targetFacility) && !restaurants.some(targetMatches)) {
+      const targetFilters: string[] = []
+      if (targetRoute) targetFilters.push(`route_id.eq.${targetRoute}`, `route_aliases.cs.["${targetRoute}"]`)
+      if (targetFacility) targetFilters.push(`facility_id.eq.${targetFacility}`, `facility_aliases.cs.["${targetFacility}"]`)
+      const targetQuery = new URLSearchParams({ select: '*', latitude: 'not.is.null', longitude: 'not.is.null', limit: '5', or: `(${targetFilters})` })
+      const targetResponse = await supabaseRequest(`restaurant_explorer_classified?${targetQuery}`)
+      const targetRows = await targetResponse.json() as ExplorerRow[]
+      restaurants = [...targetRows.map(toRestaurant), ...restaurants]
+    }
     return Response.json({ restaurants, source: 'live' }, { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=300' } })
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Unable to load restaurants' }, { status: 503 })

@@ -18,7 +18,8 @@ export async function fetchRestaurants(query?: string, includeAllFacilities = fa
   if (includeAllFacilities) search.set('includeAll', 'true')
   if (target.routeId) search.set('targetRoute', target.routeId)
   if (target.facilityId) search.set('targetFacility', target.facilityId)
-  const url = `/api/restaurants${search.size ? `?${search}` : ''}`
+  const queryString = search.toString()
+  const url = `/api/restaurants${queryString ? `?${queryString}` : ''}`
   const response = await fetch(url, { signal })
   if (!response.ok) throw new Error(`Restaurant API returned ${response.status}`)
   const payload = await response.json() as RestaurantResponse

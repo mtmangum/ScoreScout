@@ -1,6 +1,6 @@
 # ScoreScout — Current State and Agent Handoff
 
-Last updated: 2026-08-18 (America/Chicago), 1.0.0 release
+Last updated: 2026-08-20 (America/Chicago), 1.1.0 release
 
 This document is the current operational handoff for ScoreScout. Read it before changing the product, data pipeline, Supabase schema, or Netlify configuration. Update it whenever behavior, infrastructure, or known constraints materially change.
 
@@ -17,6 +17,8 @@ Do not describe the profile as a food-safety verdict or independently claim that
 
 ## Production services
 
+> A migration from Netlify to Cloudflare Workers is planned but has not been executed. See [`docs/cloudflare-migration.md`](cloudflare-migration.md) for the scoped architecture, cutover steps, and open questions. Until that migration is completed and this handoff is updated, the Netlify details below remain authoritative.
+
 - Website: <https://www.scorescout.org>
 - Netlify site name: `scorescout`
 - Netlify site ID: `ef9c25ab-7069-4d35-8e85-7333cf418a3f`
@@ -31,7 +33,7 @@ Never place secret values in source control, Markdown, chat, screenshots, comman
 
 ## Repository state at this handoff
 
-- `origin/main` includes canonical duplicate handling, canonical-query optimization, accessibility fixes, and the facility-classification/filter release described below.
+- `origin/main` includes canonical duplicate handling, canonical-query optimization, accessibility fixes, the facility-classification/filter release, and (pending push, as of this handoff) the `1.1.0` data-loading rewrite that fixes deep links and removes the arbitrary 1,000-row browse cap — see "Fixed incidents worth knowing about" and "`GET /api/restaurants`" below. `1.1.0` rather than `2.0.0`: a substantial internal rewrite, but nothing in it breaks a public contract — routes, favorites, and the API's external shape from the browser's perspective are all unchanged.
 - The Census geocoding backfill has finished; check current match counts before assuming the historical numbers below are still current.
 - All five migrations through `202608180003_facility_classification.sql` **have been applied** directly to `scorescout-production` via `supabase db query --linked -f <file>` (not via `supabase db push` — the CLI's migration ledger does not track them as applied since the initial schema was originally run through the SQL editor; `supabase migration list` shows them as `remote: ""` even though the objects exist. Repairing the ledger requires `supabase migration repair`, which the auto-mode classifier blocks as a risky action — ask the user to run it, or keep applying new migrations directly with `db query -f` as this session did).
 - The optimized definition currently in the local `202608180002_canonical_restaurant_duplicates.sql` was also applied directly to production after the first live alias-search query exposed a statement timeout. Production search recovered; the optimization avoids broad scans by expressing canonical membership as indexed union branches and looking up alias search terms directly from the rules table.
@@ -59,8 +61,8 @@ Do not reset, checkout, overwrite, or otherwise discard unrelated working-tree c
 
 ### Search and filtering
 
-- Search is server-side: `useRestaurants(searchQuery, includeAllFacilities)` debounces (300ms) and re-fetches `/api/restaurants?q=<query>`, which searches the full table rather than the capped 1,000-row unordered snapshot the app otherwise loads. Fixes a real bug: a restaurant outside whatever arbitrary 1,000 rows the no-search fetch happened to return was invisible to search even though it matched, once the dataset grew past the cap (e.g. Titaya's Thai Cuisine). Score filtering still happens client-side; favorites are composed independently from the current response.
-- `restaurants.mts` uses a different `limit` depending on whether `q` is set: `1000` for the unscoped browse/map query (unchanged, still no `order`), `5000` for a search query (comfortably above the ~6,500-restaurant table so a name/address search can't itself silently truncate), plus `order=name.asc` for determinism. Don't let a future edit collapse these back to one shared limit.
+- Search is server-side: `useRestaurants(searchQuery, includeAllFacilities)` debounces (300ms) and re-fetches `/api/restaurants?q=<query>`. As of the data-loading rewrite below, both search and the unscoped browse query return the **complete** matching set (no arbitrary row cap either way), so this is no longer a completeness distinction — search's real job is broadening scope to categories the default browse excludes (see the `and(or(visibility), or(search))` composition in `restaurants.mts`). Score filtering happens client-side over the complete summary set; favorites are composed independently from the current response.
+- **Data-loading rewrite (2026-08-20):** `/api/restaurants` no longer returns full `Restaurant` records (address, full inspection history, profile breakdown, community rating) for the browse/search listing. It returns a lightweight `RestaurantSummary` shape (id, route/facility identity + aliases, name, coordinates, `profileScore`, `latestInspection`) for **every** matching restaurant — no page cap — shared by the map and the results list. A restaurant's full record is fetched separately, on demand, only once its card is opened (`GET /api/restaurants?id=<uuid>`, via `useRestaurantDetail`). See "`GET /api/restaurants`" under Server functions below for the three response modes and the Supabase max-rows discovery that made the old 1,000-row limit unfixable by just raising `limit=`.
 - The search box has a clear (×) button, shown only when there's text in it.
 - The dual range control filters Inspection History Profile scores from 50 through 100.
 - Slider handles use a neutral dark brand color; the active track remains score-colored.
@@ -82,10 +84,10 @@ Alphabetical name order breaks score/date ties.
 ### Favorites
 
 - A star is available on every list row (the detail panel's own save button was removed as redundant).
-- Favorite IDs and restaurant snapshots persist in browser `localStorage` under `scorescout-favorite-restaurants`. The parser migrates the previous ID-only array format without losing saved IDs.
+- Favorite IDs and restaurant snapshots persist in browser `localStorage` under `scorescout-favorite-restaurants`. The parser migrates both the original ID-only array format and the pre-2026-08-20 full-`Restaurant`-shaped snapshot format (nested `profile.score`/`inspections[0]`) into the current flat `RestaurantSummary` shape, so existing users' saved favorites survive the data-loading rewrite without needing to re-save anything.
 - Favorites do not require an account and do not sync between browsers/devices.
-- On load and whenever IDs change, `/api/restaurants?ids=<uuid,...>` refreshes saved snapshots in batches of 50. The endpoint bypasses category/search constraints for exact validated IDs.
-- In the normal results view, every hydrated favorite appears in a fixed saved section that does not move when the regular-result list scrolls. The section is composed independently of the current 1,000-row browse page, search, score range, and facility category, so a saved restaurant remains there until its star is unchecked. Stored snapshots remain usable if refresh is temporarily unavailable.
+- On load and whenever IDs change, `/api/restaurants?ids=<uuid,...>` refreshes saved snapshots in batches of 50, now returning the lightweight summary shape (full detail is fetched separately only if a favorite's card is opened). The endpoint bypasses category/search constraints for exact validated IDs.
+- In the normal results view, every hydrated favorite appears in a fixed saved section that does not move when the regular-result list scrolls. The section is composed independently of search, score range, and facility category — and, since the data-loading rewrite, independently of any row cap at all, since the browse query no longer has one — so a saved restaurant remains there until its star is unchecked. Stored snapshots remain usable if refresh is temporarily unavailable.
 - The fixed section is height-capped and becomes independently scrollable when many items are saved.
 - The star counter can switch to a saved-only view; that view scrolls normally.
 - Saved and unsaved groups preserve the selected sort order internally.
@@ -123,10 +125,11 @@ Alphabetical name order breaks score/date ties.
   4. `radius: 40` at zoom 12.5 → user explicitly prefers more individual pins over a fully decluttered map ("I don't mind if a few pins overlap"): 51% individual markers (272 total) vs. 29% individual (138 total) at radius 100/zoom 12.5.
   5. Settled/current: zoom `12.5`, `radius: 15`. To land here, a temporary live radius slider (`.debug-radius-slider`, since removed) was added to `MapView.tsx` so the user could drag-test values against real production data with zero redeploys, via `netlify dev` on `localhost:8888` (proxies the real Netlify Functions to the linked Supabase project — plain `npm run dev` on 5173 can't reach `/api/restaurants` and falls back to fixture data, useless for density tuning). If radius/zoom tuning is needed again, recreate that slider rather than redeploying repeatedly to test each value — the user explicitly asked to be conservative about pushes/deploys for exploratory work like this.
   If density complaints resurface, re-run the same real-data tuning approach rather than guessing — and consider that the *center point*, not just zoom/radius, materially changes the achievable individual-pin ratio (downtown is the worst case; North Loop/East Austin/Far North all do meaningfully better at the same zoom).
+- **Stale as of the 2026-08-20 data-loading rewrite:** all of the tuning above was measured against `/api/restaurants`'s old ~1,000-row default response. The default response now returns the complete `other`-category set (~4,900 rows, up from the arbitrary ~1,000 subset previously loaded), so the map now feeds roughly 5x more points into Supercluster than it did when `radius: 15`/zoom `12.5` were chosen. Individual-pin ratios and perceived density have likely changed; re-verify against real data (same method as above) before assuming the current settings still feel right, rather than trusting the historical numbers in points 1–4.
 - Single basemap only — the Map/Satellite/Hybrid toggle was tried and then explicitly removed at the user's request. Don't reintroduce a basemap switcher without asking first.
 - Closing the detail panel does **not** recenter the map back to `defaultCenter` — that used to happen and was removed because it was disorienting when zoomed in. `SelectionPan` only reacts to a restaurant becoming selected now; it deliberately no-ops on deselect.
 - Non-obvious ordering constraint: `<ClusterMarkers>` must mount before `<SelectionPan>` in the JSX. A large deep-link-driven zoom jump fires Leaflet's `moveend` synchronously inside `setView()`; sibling effects run in JSX order, so if `SelectionPan`'s effect (which calls `setView`) ran first, `ClusterMarkers`'s `moveend` listener wouldn't be subscribed yet and would miss the event, leaving stale clusters on screen. Verified with a production build (dev-mode React StrictMode's double-effect-invoke can mask/alter this race, so always retest ordering changes against `npm run build && vite preview`, not just `npm run dev`).
-- Viewport-based *data loading* (fetching only what's in view from the API) is still not implemented — clustering here only reduces rendered markers from whatever `restaurants` array the page already has in memory.
+- Viewport-based *data loading* (fetching only what's in view from the API) is still not implemented — clustering here only reduces rendered markers from whatever `restaurants` array the page already has in memory, which as of the 2026-08-20 rewrite is the complete matching set, not an arbitrary page of it. See known issue #1 below.
 
 ### Restaurant details
 
@@ -177,7 +180,7 @@ Classification stores `facility_category`, confidence, method, and a manual-lock
 
 ### Coordinate coverage history
 
-`netlify/functions/restaurants.mts` requests rows from `restaurant_explorer` with both `latitude` and `longitude` required and a hard limit of 1,000. The Austin inspection source does not supply coordinates. Coordinates were previously added only when the Google Places enrichment accepted a match, so the public API exposed only successfully Google-matched facilities — 17 rows on the last verification, out of roughly 6,500 imported facilities.
+`netlify/functions/restaurants.mts` requests rows from `restaurant_explorer` with both `latitude` and `longitude` required. (The browse/search query no longer has a hard row limit — see "`GET /api/restaurants`" under Server functions.) The Austin inspection source does not supply coordinates. Coordinates were previously added only when the Google Places enrichment accepted a match, so the public API exposed only successfully Google-matched facilities — 17 rows on the last verification, out of roughly 6,500 imported facilities.
 
 **Fix implemented (chosen direction: free geocoder, Google as optional rating-only enrichment):**
 
@@ -195,13 +198,19 @@ Do not simply remove the coordinate filter and pass null coordinates into `MapVi
 
 File: `netlify/functions/restaurants.mts`
 
-- Reads `restaurant_explorer_classified`.
-- Requires non-null latitude and longitude.
-- Limits the unscoped query to 1,000 rows and search to 5,000 rows.
-- Defaults to `facility_category=other`; `includeAll=true` removes that category constraint.
-- Exact `ids=<uuid,...>` lookups return up to 50 validated saved restaurants without category/search filtering so browser-local favorites can be hydrated reliably.
-- Returns profiles, five recent inspections, and optional Google community ratings.
-- Uses `Cache-Control: public, max-age=60, s-maxage=300`.
+Rewritten 2026-08-20 (see `docs/explorer-data-loading-recommendation.md` for the design discussion this implements, with pagination/`total`/`hasMore` machinery deliberately dropped — a complete lightweight response turned out to be simpler and sufficient at this table size). Three response modes, picked by which query params are present:
+
+- **`?id=<uuid>`** — single full-detail lookup (all inspections, profile breakdown, community rating, address). Used only once a restaurant's card is opened (`useRestaurantDetail`), never for the browse/search list.
+- **`?ids=<uuid,...>`** — up to 50 validated IDs, batched, returned as the lightweight summary shape (see below). Used to refresh favorite snapshots; bypasses category/search filtering for exact IDs.
+- **Otherwise (browse/search)** — every matching restaurant as a lightweight `RestaurantSummary` (id, route/facility identity + aliases, name, coordinates, `profileScore`, `latestInspection` — no address, no full inspection history, no profile breakdown, no community rating). Shared by the map and the results list. Defaults to `facility_category=other`; `includeAll=true` removes that constraint; `q=` broadens across categories via `and(or(visibility), or(search))`; `targetRoute=`/`targetFacility=` keeps one specific hidden-category facility visible for a direct link without broadening the whole list.
+
+Row-count/pagination detail worth knowing before touching this function again:
+
+- Supabase's PostgREST **`max-rows` project setting caps every single response at 1,000 rows, regardless of a larger `limit=` query param.** Discovered when `limit: '10000'` still came back truncated at exactly 1,000. There's no code-level way around this short of raising the setting in the Supabase dashboard (not done — the fix below works regardless of that setting).
+- The browse/search mode instead pages through results using the `Range` header (`Range: 0-999`, `1000-1999`, ...), looping until a page comes back shorter than 1,000 rows or a 20,000-row safety ceiling is hit, and concatenates the pages.
+- This requires a **fully deterministic sort** across the separate paginated requests, since PostgREST/Postgres doesn't guarantee stable ordering for rows tied on the sort key across separate query executions. `order=name.asc` alone isn't enough — many restaurants share a name — so it's `order=name.asc,id.asc`. Removing the `id.asc` tiebreaker silently reintroduces duplicate/missing rows at page boundaries; caught in browser testing via a React duplicate-key console warning, then codified as a regression test.
+- Regression coverage: `netlify/functions/restaurants.test.ts` mocks `supabaseRequest` with a production-scale (2,500-row), heavily name-tied synthetic dataset and simulates per-call ordering instability when the tiebreaker is missing, so this class of bug is caught by `npm test` without needing a live database connection. Verified it actually fails without the `id.asc` tiebreaker before trusting it.
+- Uses `Cache-Control: public, max-age=60, s-maxage=300` on all three modes.
 
 ### Austin import
 
@@ -311,10 +320,11 @@ npm test
 git diff --check
 ```
 
-The test suite includes scoring, URL resolution (including canonical aliases), Google Places matching, canonical inspection-history grouping, and conservative facility classification.
+The test suite includes scoring, URL resolution (including canonical aliases), Google Places matching, canonical inspection-history grouping, conservative facility classification, and (as of 2026-08-20) `restaurants.mts`'s Range-pagination/ordering logic against a synthetic production-scale dataset (`netlify/functions/restaurants.test.ts`).
 
 ## Fixed incidents worth knowing about
 
+- **Deep links silently failing to open a card, root-caused to two independent bugs (fixed 2026-08-20).** Reported as "iOS Safari/Chrome deep links don't open the card." First bug: `src/api/restaurants.ts` gated the query string on `URLSearchParams.prototype.size`, a getter WebKit didn't ship until Safari 17 — on older iOS Safari, and on Chrome-on-iOS (which is required to use WebKit regardless of its Chrome branding), it silently evaluated to `undefined` and dropped the entire query string, including the param identifying which restaurant to show. Fixed by using `.toString()` instead. Second, larger bug, found by testing the fix against production data instead of trusting the client-side fix alone: even with the param arriving correctly, the target restaurant frequently still didn't appear, on **any** platform — the browse query's `or(...)` combined the target with a broad visibility filter (`facility_category=other`, matching most of the table) capped at an unordered `limit=1000`, so the specific requested row had no guarantee of surviving the truncation. This second bug is what led to the full data-loading rewrite described in "`GET /api/restaurants`" above, which fixes it structurally (no more row cap) rather than patching around it. **Lesson: verify a client-side fix against the real backend response, not just against the client-side symptom** — the `.size` fix alone would have shipped looking correct in a quick manual check while the underlying completeness bug remained live for most restaurants.
 - **`route_id` truncation → wrong restaurant on click/deep-link (fixed 2026-08-18).** `restaurant_explorer` derived `route_id` via `lpad(route_number::text, 2, '0')`. Postgres's `lpad` *truncates* (from the right) when the input is longer than the target width, not just pads short ones. With route_number now in the thousands, every route_number sharing a leading two-digit prefix (e.g. 180, 181, ..., 189, 1800-1899) collapsed onto the same `route_id`, so clicking a restaurant in the list or opening a deep link frequently opened a different, wrong restaurant. Verified against production: 8/8 sampled list clicks opened the wrong card before the fix. Fixed in `supabase/migrations/202608180001_fix_route_id_truncation.sql` by dropping the padding entirely (`route_number::text`, already unique, no truncation risk at any size) — verified 0 duplicate `route_id` values afterward and 0/8 mismatches on re-test. **Lesson: any lpad/rpad/substring-style formatting applied to an identifier must be re-checked against realistic scale, not just the original small fixture set** — this one was fine at 5 restaurants and silently broke at ~6,500. If similar cosmetic formatting shows up elsewhere (zip codes, ids, slugs), check whether it can truncate, not just whether it looks right today.
 - CDN caching gotcha encountered while verifying the above: `/api/restaurants` has `s-maxage=300`, and different Netlify edge POPs cache independently — after applying the SQL fix, some requests (e.g. `curl` from one network path) saw the fresh response immediately while others (a headless-browser test) kept serving a stale, pre-fix response for several more minutes until that edge's own TTL expired. When verifying a backend fix against `scorescout.org`, check the response's `Age` header before concluding a fix didn't work — a high `Age` means you're looking at a cached pre-fix response, not a live bug.
 
@@ -322,11 +332,10 @@ The test suite includes scoring, URL resolution (including canonical aliases), G
 
 Highest priority:
 
-1. Marker clustering is implemented (see Map section above) and solves rendering thousands of markers at once. Viewport-based *data loading* is still not implemented — `/api/restaurants` still returns up to 1,000 rows regardless of what's visible, which interacts with known issue #4 below.
+1. Marker clustering is implemented (see Map section above) and solves rendering thousands of markers at once. As of the 2026-08-20 data-loading rewrite, `/api/restaurants` returns the complete matching set rather than an arbitrary 1,000-row page, so the map now has full coverage. Viewport-based *data loading* (fetching only what's currently visible) is still not implemented — the client loads every matching lightweight summary up front regardless of viewport, which is fine at the current ~6,500-row table size (see `docs/explorer-data-loading-recommendation.md`'s "Why not viewport loading yet?") but would need revisiting if the dataset grows substantially past that.
 2. Conservative classification covers high-confidence school and healthcare names. Grocery stores, convenience stores, and other ambiguous establishment types remain `other`; expand only with audited, low-false-positive rules or manual review.
 3. Favorites are browser-local only; account-backed synchronization would require authentication and a user-favorites table.
-4. The API hard limit is 1,000 and there is no pagination or viewport query.
-5. The README and older implementation handoff contain some early-stack recommendations that no longer reflect the deployed Netlify/Supabase implementation; use this document as the current source of truth.
+4. The README and older implementation handoff contain some early-stack recommendations that no longer reflect the deployed Netlify/Supabase implementation; use this document as the current source of truth.
 
 ## Recent product decisions
 

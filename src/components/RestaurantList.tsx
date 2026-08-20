@@ -1,8 +1,8 @@
-import type { Restaurant } from '../features/restaurants/types'
+import type { RestaurantSummary } from '../features/restaurants/types'
 import { scoreTone } from '../features/restaurants/scoreTone'
 
 interface RestaurantListProps {
-  restaurants: Restaurant[]
+  restaurants: RestaurantSummary[]
   selectedId: string | null
   favoriteIds: ReadonlySet<string>
   favoritesOnly: boolean
@@ -16,12 +16,12 @@ export function RestaurantList({ restaurants, selectedId, favoriteIds, favorites
   const favoriteRestaurants = restaurants.filter(({ id }) => favoriteIds.has(id))
   const otherRestaurants = restaurants.filter(({ id }) => !favoriteIds.has(id))
   const pinFavorites = !favoritesOnly && favoriteRestaurants.length > 0 && otherRestaurants.length > 0
-  const restaurantRow = (restaurant: Restaurant) => (
+  const restaurantRow = (restaurant: RestaurantSummary) => (
     <div key={restaurant.id} className={`restaurant-row ${selectedId === restaurant.id ? 'selected' : ''}`}>
       <button className="restaurant-row-main" onClick={() => onSelect(restaurant.id)}>
-        <i className={`row-dot ${scoreTone(restaurant.profile.score)}`} aria-hidden="true" />
-        <span className="row-copy"><strong>{restaurant.name}</strong><small>Official {restaurant.inspections[0].score} · {monthFormatter.format(new Date(restaurant.inspections[0].date))}</small></span>
-        <span className={`row-score ${scoreTone(restaurant.profile.score)}`}><strong>{restaurant.profile.score}</strong><small>profile</small></span>
+        <i className={`row-dot ${scoreTone(restaurant.profileScore)}`} aria-hidden="true" />
+        <span className="row-copy"><strong>{restaurant.name}</strong><small>Official {restaurant.latestInspection.score} · {monthFormatter.format(new Date(restaurant.latestInspection.date))}</small></span>
+        <span className={`row-score ${scoreTone(restaurant.profileScore)}`}><strong>{restaurant.profileScore}</strong><small>profile</small></span>
       </button>
       <button className={`favorite-button ${favoriteIds.has(restaurant.id) ? 'active' : ''}`} type="button" onClick={() => onToggleFavorite(restaurant.id)} aria-pressed={favoriteIds.has(restaurant.id)} aria-label={`${favoriteIds.has(restaurant.id) ? 'Remove' : 'Save'} ${restaurant.name}`}><span aria-hidden="true">{favoriteIds.has(restaurant.id) ? '★' : '☆'}</span></button>
     </div>

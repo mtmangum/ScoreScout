@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { composeRestaurantList, mergeRestaurantSources } from './favoriteRestaurants'
-import type { Restaurant } from './types'
+import type { RestaurantSummary } from './types'
 
-const restaurant = (id: string, name = id) => ({ id, name } as Restaurant)
+const restaurant = (id: string, name = id) => ({ id, name } as RestaurantSummary)
 
 describe('favorite restaurant composition', () => {
   it('keeps saved snapshots when the current API page does not contain them', () => {

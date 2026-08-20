@@ -1,14 +1,14 @@
-import type { Restaurant } from './types'
+import type { RestaurantSummary } from './types'
 
-export function mergeRestaurantSources(restaurants: Restaurant[], favoriteSnapshots: Restaurant[]) {
+export function mergeRestaurantSources(restaurants: RestaurantSummary[], favoriteSnapshots: RestaurantSummary[]) {
   const byId = new Map(favoriteSnapshots.map((restaurant) => [restaurant.id, restaurant]))
   restaurants.forEach((restaurant) => byId.set(restaurant.id, restaurant))
   return [...byId.values()]
 }
 
 export function composeRestaurantList(
-  savedRestaurants: Restaurant[],
-  browseRestaurants: Restaurant[],
+  savedRestaurants: RestaurantSummary[],
+  browseRestaurants: RestaurantSummary[],
   favoriteIds: ReadonlySet<string>,
   favoritesOnly: boolean,
 ) {

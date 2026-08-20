@@ -1,24 +1,39 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchRestaurantsByIds } from '../api/restaurants'
-import type { Restaurant } from '../features/restaurants/types'
+import type { RestaurantSummary } from '../features/restaurants/types'
 
 const storageKey = 'scorescout-favorite-restaurants'
 
 interface FavoriteState {
   ids: string[]
-  restaurants: Restaurant[]
+  restaurants: RestaurantSummary[]
 }
 
-function isRestaurant(value: unknown): value is Restaurant {
-  if (!value || typeof value !== 'object') return false
-  const candidate = value as Partial<Restaurant>
-  const latestInspection = candidate.inspections?.[0]
-  return typeof candidate.id === 'string' && typeof candidate.name === 'string' &&
-    typeof candidate.address === 'string' && typeof candidate.cityCode === 'string' &&
-    typeof candidate.routeId === 'string' && typeof candidate.facilityId === 'string' &&
-    typeof candidate.latitude === 'number' && typeof candidate.longitude === 'number' &&
-    Boolean(latestInspection && typeof latestInspection.date === 'string' && typeof latestInspection.score === 'number') &&
-    Boolean(candidate.profile && typeof candidate.profile.score === 'number')
+// Accepts both the current flat summary shape and the pre-migration full
+// `Restaurant` shape (nested `profile.score` / `inspections[0]`), so favorites
+// saved by an older build of the app still survive this parse.
+function toSummary(value: unknown): RestaurantSummary | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as Record<string, unknown>
+  if (typeof candidate.id !== 'string' || typeof candidate.name !== 'string' ||
+    typeof candidate.cityCode !== 'string' || typeof candidate.routeId !== 'string' ||
+    typeof candidate.facilityId !== 'string' ||
+    typeof candidate.latitude !== 'number' || typeof candidate.longitude !== 'number') return null
+
+  const legacyProfile = candidate.profile as { score?: unknown } | undefined
+  const profileScore = typeof candidate.profileScore === 'number' ? candidate.profileScore : legacyProfile?.score
+  const legacyInspections = candidate.inspections as Array<{ score?: unknown; date?: unknown }> | undefined
+  const latestInspection = (candidate.latestInspection as { score?: unknown; date?: unknown } | undefined) ?? legacyInspections?.[0]
+  if (typeof profileScore !== 'number' || !latestInspection ||
+    typeof latestInspection.score !== 'number' || typeof latestInspection.date !== 'string') return null
+
+  return {
+    id: candidate.id, name: candidate.name, cityCode: candidate.cityCode, routeId: candidate.routeId, facilityId: candidate.facilityId,
+    routeAliases: candidate.routeAliases as string[] | undefined, facilityAliases: candidate.facilityAliases as string[] | undefined,
+    facilityCategory: candidate.facilityCategory as RestaurantSummary['facilityCategory'],
+    latitude: candidate.latitude, longitude: candidate.longitude,
+    profileScore, latestInspection: { score: latestInspection.score, date: latestInspection.date },
+  }
 }
 
 export function parseStoredFavorites(serialized: string | null): FavoriteState {
@@ -36,7 +51,7 @@ export function parseStoredFavorites(serialized: string | null): FavoriteState {
       : []
     const idSet = new Set(ids)
     const restaurants = Array.isArray(candidate.restaurants)
-      ? candidate.restaurants.filter(isRestaurant).filter(({ id }) => idSet.has(id))
+      ? candidate.restaurants.map(toSummary).filter((restaurant): restaurant is RestaurantSummary => restaurant !== null && idSet.has(restaurant.id))
       : []
     return { ids, restaurants }
   } catch {
@@ -52,7 +67,7 @@ function loadFavorites() {
   }
 }
 
-function mergeSnapshots(current: FavoriteState, refreshed: Restaurant[]) {
+function mergeSnapshots(current: FavoriteState, refreshed: RestaurantSummary[]) {
   const byId = new Map(current.restaurants.map((restaurant) => [restaurant.id, restaurant]))
   refreshed.forEach((restaurant) => {
     if (current.ids.includes(restaurant.id)) byId.set(restaurant.id, restaurant)
@@ -90,7 +105,7 @@ export function useFavorites() {
     return () => controller.abort()
   }, [favoriteIdsKey])
 
-  const toggleFavorite = useCallback((restaurant: Restaurant) => {
+  const toggleFavorite = useCallback((restaurant: RestaurantSummary) => {
     setFavorites((current) => {
       if (current.ids.includes(restaurant.id)) {
         return {

@@ -4,6 +4,7 @@ import { MapView } from '../components/MapView'
 import { RestaurantDetail } from '../components/RestaurantDetail'
 import { RestaurantList } from '../components/RestaurantList'
 import { useFavorites } from '../hooks/useFavorites'
+import { useRestaurantDetail } from '../hooks/useRestaurantDetail'
 import { useRestaurants } from '../hooks/useRestaurants'
 import { useTheme } from '../hooks/useTheme'
 import { resolveSelectedRestaurant } from '../features/restaurants/resolveSelectedRestaurant'
@@ -56,19 +57,23 @@ export function ExplorePage() {
   const [sortBy, setSortBy] = useState<RestaurantSort>('inspection-desc')
   const [showFavorites, setShowFavorites] = useState(false)
   const [mobileView, setMobileView] = useState<MobileView>('map')
-  // Search itself is server-side (see useRestaurants) since the API caps at 1,000
-  // unordered rows and the full dataset is larger than that. Score filtering
-  // applies to that response; saved snapshots are merged separately below so
-  // favorites cannot vanish with the current page or query.
+  // The API returns every matching restaurant as a lightweight summary (see
+  // useRestaurants), so score filtering and sorting below apply to the whole
+  // matching population, not an arbitrary page of it. Saved snapshots are
+  // merged separately so favorites cannot vanish with the current query.
   const allRestaurants = useMemo(() => mergeRestaurantSources(restaurants, favoriteRestaurants), [restaurants, favoriteRestaurants])
   const filtered = useMemo(() => restaurants.filter((restaurant) =>
-    restaurant.profile.score >= scoreMinimum && restaurant.profile.score <= scoreMaximum,
+    restaurant.profileScore >= scoreMinimum && restaurant.profileScore <= scoreMaximum,
   ), [restaurants, scoreMinimum, scoreMaximum])
   const savedRestaurants = useMemo(() => allRestaurants.filter(({ id }) => favoriteIds.has(id)), [allRestaurants, favoriteIds])
   const selected = useMemo(
     () => resolveSelectedRestaurant(allRestaurants, { facilityId, cityCode, restaurantKey }),
     [allRestaurants, facilityId, cityCode, restaurantKey],
   )
+  // The list/map only ever hold lightweight summaries; a selected restaurant's
+  // full record (inspection history, community rating, etc.) is fetched on
+  // demand here so it isn't carried by every row just in case it gets opened.
+  const { detail: selectedDetail } = useRestaurantDetail(selected, source)
   const selectedId = selected?.id ?? null
   const browseRestaurants = useMemo(() => selected && !filtered.some(({ id }) => id === selected.id)
     ? [...filtered, selected]
@@ -85,9 +90,9 @@ export function ExplorePage() {
     return [...listRestaurants].sort((a, b) => {
       const favoriteOrder = Number(favoriteIds.has(b.id)) - Number(favoriteIds.has(a.id))
       if (favoriteOrder) return favoriteOrder
-      if (sortBy === 'score-desc') return b.profile.score - a.profile.score || a.name.localeCompare(b.name)
-      if (sortBy === 'score-asc') return a.profile.score - b.profile.score || a.name.localeCompare(b.name)
-      if (sortBy === 'inspection-desc') return new Date(b.inspections[0].date).getTime() - new Date(a.inspections[0].date).getTime() || a.name.localeCompare(b.name)
+      if (sortBy === 'score-desc') return b.profileScore - a.profileScore || a.name.localeCompare(b.name)
+      if (sortBy === 'score-asc') return a.profileScore - b.profileScore || a.name.localeCompare(b.name)
+      if (sortBy === 'inspection-desc') return new Date(b.latestInspection.date).getTime() - new Date(a.latestInspection.date).getTime() || a.name.localeCompare(b.name)
       return a.name.localeCompare(b.name)
     })
   }, [listRestaurants, sortBy, favoriteIds])
@@ -172,7 +177,7 @@ export function ExplorePage() {
         </footer>
       </section>
       <section className="map-region"><MapView restaurants={mapRestaurants} selectedId={selectedId} onSelect={selectRestaurant} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
-      {selected && <RestaurantDetail restaurant={selected} onClose={() => navigate('/')} />}
+      {selected && <RestaurantDetail restaurant={selectedDetail} name={selected.name} onClose={() => navigate('/')} />}
     </main>
   )
 }

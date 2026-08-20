@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { divIcon } from 'leaflet'
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import Supercluster from 'supercluster'
-import type { Restaurant } from '../features/restaurants/types'
+import type { RestaurantSummary } from '../features/restaurants/types'
 import { scoreTone } from '../features/restaurants/scoreTone'
 
 interface MapViewProps {
-  restaurants: Restaurant[]
+  restaurants: RestaurantSummary[]
   selectedId: string | null
   onSelect: (id: string) => void
 }
@@ -52,7 +52,7 @@ function clusterPin(count: number, worstScore: number) {
   })
 }
 
-function useRestaurantClusterIndex(restaurants: Restaurant[]) {
+function useRestaurantClusterIndex(restaurants: RestaurantSummary[]) {
   return useMemo(() => {
     const index: RestaurantCluster = new Supercluster({
       radius: clusterRadius,
@@ -62,7 +62,7 @@ function useRestaurantClusterIndex(restaurants: Restaurant[]) {
     })
     index.load(restaurants.map((restaurant) => ({
       type: 'Feature',
-      properties: { restaurantId: restaurant.id, score: restaurant.profile.score },
+      properties: { restaurantId: restaurant.id, score: restaurant.profileScore },
       geometry: { type: 'Point', coordinates: [restaurant.longitude, restaurant.latitude] },
     })))
     return index
@@ -75,7 +75,7 @@ function useRestaurantClusterIndex(restaurants: Restaurant[]) {
 // A single expansion step can land on a sub-cluster that still contains the restaurant,
 // so instead of hopping level by level, jump straight past clusterMaxZoom, above which
 // Supercluster never groups points, guaranteeing the restaurant renders individually.
-function findExpansionZoom(map: ReturnType<typeof useMap>, index: RestaurantCluster, restaurant: Restaurant, atZoom: number) {
+function findExpansionZoom(map: ReturnType<typeof useMap>, index: RestaurantCluster, restaurant: RestaurantSummary, atZoom: number) {
   const zoom = Math.round(atZoom)
   const centerPoint = map.project([restaurant.latitude, restaurant.longitude], zoom)
   const northWest = map.unproject(centerPoint.subtract([clusterRadius, clusterRadius]), zoom)
@@ -86,7 +86,7 @@ function findExpansionZoom(map: ReturnType<typeof useMap>, index: RestaurantClus
   return isIndividual ? null : clusterMaxZoom + 1
 }
 
-function SelectionPan({ restaurant, index }: { restaurant?: Restaurant; index: RestaurantCluster }) {
+function SelectionPan({ restaurant, index }: { restaurant?: RestaurantSummary; index: RestaurantCluster }) {
   const map = useMap()
 
   useEffect(() => {
@@ -167,7 +167,7 @@ function LocateButton() {
 
 function ClusterMarkers({ index, restaurantsById, selectedId, onSelect }: {
   index: RestaurantCluster
-  restaurantsById: Map<string, Restaurant>
+  restaurantsById: Map<string, RestaurantSummary>
   selectedId: string | null
   onSelect: (id: string) => void
 }) {
@@ -209,7 +209,7 @@ function ClusterMarkers({ index, restaurantsById, selectedId, onSelect }: {
           <Marker
             key={restaurant.id}
             position={[restaurant.latitude, restaurant.longitude]}
-            icon={scorePin(restaurant.profile.score, selected)}
+            icon={scorePin(restaurant.profileScore, selected)}
             zIndexOffset={selected ? 1000 : 0}
             eventHandlers={{ click: () => onSelect(restaurant.id) }}
           />

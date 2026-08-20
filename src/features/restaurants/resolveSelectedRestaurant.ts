@@ -1,9 +1,15 @@
-import type { Restaurant } from './types'
-
 export interface SelectionParams {
   facilityId?: string
   cityCode?: string
   restaurantKey?: string
+}
+
+interface Routable {
+  facilityId: string
+  cityCode: string
+  routeId: string
+  routeAliases?: string[]
+  facilityAliases?: string[]
 }
 
 /**
@@ -14,7 +20,7 @@ export interface SelectionParams {
  * key match is fuzzy (endsWith) and checked last, sorted longest-facilityId
  * first so a shorter facilityId can't shadow a longer one that ends with it.
  */
-export function resolveSelectedRestaurant(restaurants: Restaurant[], { facilityId, cityCode, restaurantKey }: SelectionParams): Restaurant | null {
+export function resolveSelectedRestaurant<T extends Routable>(restaurants: T[], { facilityId, cityCode, restaurantKey }: SelectionParams): T | null {
   const normalizedFacilityId = facilityId?.toUpperCase()
   if (normalizedFacilityId) {
     const byFacilityId = restaurants.find((restaurant) =>

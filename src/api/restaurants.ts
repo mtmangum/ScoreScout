@@ -1,6 +1,11 @@
-import type { Restaurant } from '../features/restaurants/types'
+import type { Restaurant, RestaurantSummary } from '../features/restaurants/types'
 
-interface RestaurantResponse {
+interface RestaurantSummaryResponse {
+  restaurants: RestaurantSummary[]
+  source: 'live'
+}
+
+interface RestaurantDetailResponse {
   restaurants: Restaurant[]
   source: 'live'
 }
@@ -22,8 +27,15 @@ export async function fetchRestaurants(query?: string, includeAllFacilities = fa
   const url = `/api/restaurants${queryString ? `?${queryString}` : ''}`
   const response = await fetch(url, { signal })
   if (!response.ok) throw new Error(`Restaurant API returned ${response.status}`)
-  const payload = await response.json() as RestaurantResponse
+  const payload = await response.json() as RestaurantSummaryResponse
   return payload.restaurants
+}
+
+export async function fetchRestaurantDetail(id: string, signal?: AbortSignal) {
+  const response = await fetch(`/api/restaurants?${new URLSearchParams({ id })}`, { signal })
+  if (!response.ok) throw new Error(`Restaurant API returned ${response.status}`)
+  const payload = await response.json() as RestaurantDetailResponse
+  return payload.restaurants[0] ?? null
 }
 
 export async function fetchRestaurantsByIds(ids: string[], signal?: AbortSignal) {
@@ -34,7 +46,7 @@ export async function fetchRestaurantsByIds(ids: string[], signal?: AbortSignal)
     const search = new URLSearchParams({ ids: batch.join(',') })
     const response = await fetch(`/api/restaurants?${search}`, { signal })
     if (!response.ok) throw new Error(`Favorite restaurant API returned ${response.status}`)
-    return (await response.json() as RestaurantResponse).restaurants
+    return (await response.json() as RestaurantSummaryResponse).restaurants
   }))
   return responses.flat()
 }

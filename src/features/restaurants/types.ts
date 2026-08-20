@@ -43,3 +43,23 @@ export interface Restaurant {
   profile: ProfileBreakdown
   communityRating?: CommunityRating
 }
+
+/**
+ * The lightweight shape used for the map and the results list — the full
+ * `Restaurant` record (inspection history, profile breakdown, community
+ * rating) is only fetched on demand once a specific restaurant is selected.
+ */
+export interface RestaurantSummary {
+  id: string
+  cityCode: string
+  routeId: string
+  facilityId: string
+  routeAliases?: string[]
+  facilityAliases?: string[]
+  facilityCategory?: FacilityCategory
+  name: string
+  latitude: number
+  longitude: number
+  profileScore: number
+  latestInspection: { score: number; date: string }
+}

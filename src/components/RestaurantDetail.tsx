@@ -2,31 +2,14 @@ import { useEffect, useId, useRef } from 'react'
 import type { Restaurant } from '../features/restaurants/types'
 import { ScoreBadge } from './ScoreBadge'
 
-interface RestaurantDetailProps { restaurant: Restaurant; onClose: () => void }
+interface RestaurantDetailProps { restaurant: Restaurant | null; name: string; onClose: () => void }
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 
-export function RestaurantDetail({ restaurant, onClose }: RestaurantDetailProps) {
+export function RestaurantDetail({ restaurant, name, onClose }: RestaurantDetailProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const onCloseRef = useRef(onClose)
   const titleId = useId()
-  const latest = restaurant.inspections[0]
-  const profile = restaurant.profile
-  const trendWord = profile.trendAdjustment > 0.2 ? 'improving' : profile.trendAdjustment < -0.2 ? 'declining' : 'steady'
-  const chartInspections = restaurant.inspections.slice(0, 4).reverse()
-  const chartMinimum = Math.min(60, Math.floor(Math.min(...chartInspections.map(({ score }) => score)) / 10) * 10)
-  const chartLeft = 32
-  const chartRight = 308
-  const chartTop = 18
-  const chartBottom = 124
-  const chartX = (index: number) => chartInspections.length === 1
-    ? (chartLeft + chartRight) / 2
-    : chartLeft + index * (chartRight - chartLeft) / (chartInspections.length - 1)
-  const chartY = (score: number) => chartTop + (100 - score) * (chartBottom - chartTop) / (100 - chartMinimum)
-  const chartPoints = chartInspections.map(({ score }, index) => `${chartX(index)},${chartY(score)}`).join(' ')
-  const communitySourceUrl = restaurant.communityRating?.sourceBusinessId.startsWith('fixture-')
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${restaurant.name}, ${restaurant.address}`)}`
-    : restaurant.communityRating?.sourceUrl
 
   useEffect(() => {
     onCloseRef.current = onClose
@@ -49,6 +32,35 @@ export function RestaurantDetail({ restaurant, onClose }: RestaurantDetailProps)
       if (previouslyFocused?.isConnected) previouslyFocused.focus()
     }
   }, [])
+
+  if (!restaurant) {
+    return (
+      <aside className="detail-panel" role="dialog" aria-labelledby={titleId}>
+        <button ref={closeButtonRef} className="close-button" onClick={onClose} aria-label="Close details">×</button>
+        <p className="eyebrow">Inspection history</p>
+        <h2 id={titleId}>{name}</h2>
+        <p className="address">Loading details…</p>
+      </aside>
+    )
+  }
+
+  const latest = restaurant.inspections[0]
+  const profile = restaurant.profile
+  const trendWord = profile.trendAdjustment > 0.2 ? 'improving' : profile.trendAdjustment < -0.2 ? 'declining' : 'steady'
+  const chartInspections = restaurant.inspections.slice(0, 4).reverse()
+  const chartMinimum = Math.min(60, Math.floor(Math.min(...chartInspections.map(({ score }) => score)) / 10) * 10)
+  const chartLeft = 32
+  const chartRight = 308
+  const chartTop = 18
+  const chartBottom = 124
+  const chartX = (index: number) => chartInspections.length === 1
+    ? (chartLeft + chartRight) / 2
+    : chartLeft + index * (chartRight - chartLeft) / (chartInspections.length - 1)
+  const chartY = (score: number) => chartTop + (100 - score) * (chartBottom - chartTop) / (100 - chartMinimum)
+  const chartPoints = chartInspections.map(({ score }, index) => `${chartX(index)},${chartY(score)}`).join(' ')
+  const communitySourceUrl = restaurant.communityRating?.sourceBusinessId.startsWith('fixture-')
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${restaurant.name}, ${restaurant.address}`)}`
+    : restaurant.communityRating?.sourceUrl
 
   return (
     <aside className="detail-panel" role="dialog" aria-labelledby={titleId}>

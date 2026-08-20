@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-20
+
 ### Added
 
 - Added reviewed duplicate-facility rules that retain Austin source identities while presenting linked records as one canonical establishment.
@@ -17,11 +19,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 
 - Default explorer requests now omit high-confidence school and healthcare facilities while preserving them through the opt-in filter and direct links.
+- Replaced the arbitrary 1,000-row browse cap with a complete, lightweight summary listing (paginated server-side via Supabase's Range headers past its 1,000-row max-rows setting) shared by the map and results list, plus a separate on-demand fetch for a restaurant's full record (inspection history, profile breakdown, community rating) once its card is opened. The map now shows every matching restaurant instead of an arbitrary subset, and list sorting/filtering operate over the full matching population.
+- Added a stable `id` tiebreaker to the browse query's sort order — needed once results were paginated across multiple requests, since rows tied on name alone aren't guaranteed the same order across separate query executions and could otherwise be duplicated or skipped at a page boundary. Added a regression test (`netlify/functions/restaurants.test.ts`) that simulates a production-scale, heavily-tied dataset to catch this class of bug without a live database connection.
 
 ### Fixed
 
-- Fixed direct restaurant links failing to open their detail card: the API param used to fetch a specific restaurant was silently dropped on older WebKit browsers (iOS Safari pre-17, Chrome on iOS), and even when present, the browse query's unordered 1,000-row cap could truncate the result before the requested restaurant was reached.
-- Kept saved restaurants permanently pinned until explicitly unchecked, independent of search, score filters, facility categories, or the API's 1,000-row browse page; existing ID-only favorites migrate to locally cached, API-refreshed snapshots.
+- Fixed direct restaurant links failing to open their detail card: the API param used to fetch a specific restaurant was silently dropped on older WebKit browsers (iOS Safari pre-17, Chrome on iOS), and — independent of that — the browse query's unordered 1,000-row cap could truncate the result before the requested restaurant was reached even when the param arrived correctly. The row-cap side is now fixed structurally rather than worked around, by the summary-listing change above.
+- Kept saved restaurants permanently pinned until explicitly unchecked, independent of search, score filters, facility categories, or the API's browse page; existing ID-only favorites migrate to locally cached, API-refreshed snapshots, and (as of this release) favorites saved by an older build in the previous full-record format migrate transparently to the new lightweight format too.
 - Optimized canonical duplicate membership and alias search queries to avoid production statement timeouts, and made the duplicate-rule trigger safely idempotent.
 - Improved amber contrast by separating amber backgrounds from theme-aware amber text colors.
 - Added consistent keyboard focus indicators, including a visible focus treatment around search.

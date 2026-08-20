@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- The sidebar list now only shows restaurants within the map's current viewport, staying in sync as the map is panned or zoomed, instead of always listing the full (up to ~4871-row) matching population regardless of what's actually visible. A search bypasses this scoping entirely so a match off-screen never silently disappears, and favorites/the open detail panel's restaurant are likewise always kept. The results count reads "N places in view" when the list is viewport-scoped.
+- Added a "Reset" button next to the map's locate control that flies back to the default Austin view; it only appears once panning/zooming has actually cropped a restaurant out of the current view.
+- Added a slim top-of-page loading bar, driven by the same loading state already used for the "Loading Austin data…" label, so an in-progress data fetch (initial load, or after clearing a search) reads as "still working" instead of looking hung.
+
+### Fixed
+
+- Stripped leading permit-record prefixes (`OOB - `, `PF - `, `BC - `) from facility names in the list, favorite button label, and detail modal. These come straight from Austin's source feed and misleadingly read as status codes (e.g. "OOB" as "out of business") even for open, trading restaurants. Matching, search, sorting, and URL slugs still use the raw name.
+- Fixed noticeable input lag when typing in the search box: the restaurant list and map weren't memoized, so every keystroke re-rendered thousands of list rows and rebuilt the map's marker clustering even though the underlying data hadn't changed yet (the search query is debounced before it triggers a real fetch).
+
 ## [1.1.0] - 2026-08-20
 
 ### Added

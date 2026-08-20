@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import type { Restaurant } from '../features/restaurants/types'
+import { formatFacilityName } from '../features/restaurants/facilityName'
 import { ScoreBadge } from './ScoreBadge'
 
 interface RestaurantDetailProps { restaurant: Restaurant | null; name: string; onClose: () => void }
@@ -38,7 +39,7 @@ export function RestaurantDetail({ restaurant, name, onClose }: RestaurantDetail
       <aside className="detail-panel" role="dialog" aria-labelledby={titleId}>
         <button ref={closeButtonRef} className="close-button" onClick={onClose} aria-label="Close details">×</button>
         <p className="eyebrow">Inspection history</p>
-        <h2 id={titleId}>{name}</h2>
+        <h2 id={titleId}>{formatFacilityName(name)}</h2>
         <p className="address">Loading details…</p>
       </aside>
     )
@@ -59,14 +60,14 @@ export function RestaurantDetail({ restaurant, name, onClose }: RestaurantDetail
   const chartY = (score: number) => chartTop + (100 - score) * (chartBottom - chartTop) / (100 - chartMinimum)
   const chartPoints = chartInspections.map(({ score }, index) => `${chartX(index)},${chartY(score)}`).join(' ')
   const communitySourceUrl = restaurant.communityRating?.sourceBusinessId.startsWith('fixture-')
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${restaurant.name}, ${restaurant.address}`)}`
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${formatFacilityName(restaurant.name)}, ${restaurant.address}`)}`
     : restaurant.communityRating?.sourceUrl
 
   return (
     <aside className="detail-panel" role="dialog" aria-labelledby={titleId}>
       <button ref={closeButtonRef} className="close-button" onClick={onClose} aria-label="Close details">×</button>
       <p className="eyebrow">Inspection history</p>
-      <h2 id={titleId}>{restaurant.name}</h2>
+      <h2 id={titleId}>{formatFacilityName(restaurant.name)}</h2>
       <p className="address">{restaurant.address}</p>
 
       <div className="profile-hero">

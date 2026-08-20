@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useMemo, useState, type CSSProperties } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { MapView } from '../components/MapView'
 import { RestaurantDetail } from '../components/RestaurantDetail'
@@ -9,6 +9,7 @@ import { useRestaurants } from '../hooks/useRestaurants'
 import { useTheme } from '../hooks/useTheme'
 import { resolveSelectedRestaurant } from '../features/restaurants/resolveSelectedRestaurant'
 import { composeRestaurantList, mergeRestaurantSources } from '../features/restaurants/favoriteRestaurants'
+import { isWithinBounds, type ViewportBounds } from '../features/restaurants/viewportBounds'
 import scoreScoutLogo from '../assets/scorescout-logo.png'
 
 type RestaurantSort = 'score-desc' | 'score-asc' | 'inspection-desc' | 'name-asc'
@@ -57,6 +58,7 @@ export function ExplorePage() {
   const [sortBy, setSortBy] = useState<RestaurantSort>('inspection-desc')
   const [showFavorites, setShowFavorites] = useState(false)
   const [mobileView, setMobileView] = useState<MobileView>('map')
+  const [bounds, setBounds] = useState<ViewportBounds | null>(null)
   // The API returns every matching restaurant as a lightweight summary (see
   // useRestaurants), so score filtering and sorting below apply to the whole
   // matching population, not an arbitrary page of it. Saved snapshots are
@@ -82,9 +84,23 @@ export function ExplorePage() {
     const base = showFavorites ? savedRestaurants : browseRestaurants
     return selected && !base.some(({ id }) => id === selected.id) ? [...base, selected] : base
   }, [showFavorites, savedRestaurants, browseRestaurants, selected])
+  // The reset-view control only earns its place once panning/zooming has actually
+  // cropped something out of view; otherwise it's a button with nothing to do.
+  const isZoomedIn = useMemo(
+    () => bounds !== null && !mapRestaurants.every((restaurant) => isWithinBounds(restaurant, bounds)),
+    [bounds, mapRestaurants],
+  )
+  // Viewport filtering is suspended while a search is active, so a match
+  // outside the current map view doesn't silently disappear from the list.
+  const visibleBrowseRestaurants = useMemo(() => {
+    if (!bounds || query.trim()) return browseRestaurants
+    return browseRestaurants.filter(
+      (restaurant) => restaurant.id === selected?.id || isWithinBounds(restaurant, bounds),
+    )
+  }, [browseRestaurants, bounds, query, selected])
   const listRestaurants = useMemo(
-    () => composeRestaurantList(savedRestaurants, browseRestaurants, favoriteIds, showFavorites),
-    [showFavorites, savedRestaurants, browseRestaurants, favoriteIds],
+    () => composeRestaurantList(savedRestaurants, visibleBrowseRestaurants, favoriteIds, showFavorites),
+    [showFavorites, savedRestaurants, visibleBrowseRestaurants, favoriteIds],
   )
   const sortedRestaurants = useMemo(() => {
     return [...listRestaurants].sort((a, b) => {
@@ -99,13 +115,21 @@ export function ExplorePage() {
   const scoreColor = (score: number) => score >= 90 ? 'var(--green)' : score >= 70 ? 'var(--amber)' : 'var(--red)'
   const minimumProgress = (scoreMinimum - 50) * 2
   const maximumProgress = (scoreMaximum - 50) * 2
-  const selectRestaurant = (id: string) => {
+  // Memoized so RestaurantList/MapView (both React.memo'd, both expensive to
+  // re-render across thousands of rows/markers) don't re-render on every
+  // keystroke in the search box while the query itself is still debouncing.
+  const selectRestaurant = useCallback((id: string) => {
     const restaurant = allRestaurants.find((candidate) => candidate.id === id)
     if (restaurant) navigate(`/${restaurant.cityCode}/${slugify(restaurant.name)}-${restaurant.routeId}`)
-  }
+  }, [allRestaurants, navigate])
+  const handleToggleFavorite = useCallback((id: string) => {
+    const restaurant = allRestaurants.find((candidate) => candidate.id === id)
+    if (restaurant) toggleFavorite(restaurant)
+  }, [allRestaurants, toggleFavorite])
 
   return (
     <main className="app-shell" data-mobile-view={mobileView}>
+      <div className={`load-bar ${loading ? 'active' : ''}`} aria-hidden="true" />
       <header className="mobile-header">
         <img className="brand-mark" src={scoreScoutLogo} alt="" />
         <div className="mobile-brand-copy"><strong>ScoreScout</strong><small>Austin inspection explorer</small></div>
@@ -148,7 +172,7 @@ export function ExplorePage() {
           </div>
         </div>
         <div className="results-heading">
-          <div className="results-meta"><strong>{sortedRestaurants.length} places</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
+          <div className="results-meta"><strong>{sortedRestaurants.length} places{bounds && !query.trim() && !showFavorites ? ' in view' : ''}</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
           <div className="results-controls">
             <button className={`saved-filter ${showFavorites ? 'active' : ''}`} type="button" onClick={() => setShowFavorites((current) => !current)} aria-pressed={showFavorites} aria-label={`${showFavorites ? 'Show all restaurants' : 'Show saved restaurants'}; ${favoriteIds.size} saved`}><span aria-hidden="true">★</span> {favoriteIds.size}</button>
             <select className="sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value as RestaurantSort)} aria-label="Sort restaurants">
@@ -159,10 +183,7 @@ export function ExplorePage() {
             </select>
           </div>
         </div>
-        <RestaurantList restaurants={sortedRestaurants} selectedId={selectedId} favoriteIds={favoriteIds} favoritesOnly={showFavorites} onSelect={selectRestaurant} onToggleFavorite={(id) => {
-          const restaurant = allRestaurants.find((candidate) => candidate.id === id)
-          if (restaurant) toggleFavorite(restaurant)
-        }} />
+        <RestaurantList restaurants={sortedRestaurants} selectedId={selectedId} favoriteIds={favoriteIds} favoritesOnly={showFavorites} onSelect={selectRestaurant} onToggleFavorite={handleToggleFavorite} />
         <footer>
           <details>
             <summary>About scores &amp; data</summary>
@@ -176,7 +197,7 @@ export function ExplorePage() {
           <span>{source === 'live' ? 'Data source: City of Austin' : 'Live data unavailable · Sample restaurants shown'}</span>
         </footer>
       </section>
-      <section className="map-region"><MapView restaurants={mapRestaurants} selectedId={selectedId} onSelect={selectRestaurant} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
+      <section className="map-region"><MapView restaurants={mapRestaurants} selectedId={selectedId} onSelect={selectRestaurant} onBoundsChange={setBounds} showResetView={isZoomedIn} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
       {selected && <RestaurantDetail restaurant={selectedDetail} name={selected.name} onClose={() => navigate('/')} />}
     </main>
   )

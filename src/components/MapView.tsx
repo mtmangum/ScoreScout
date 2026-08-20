@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { divIcon } from 'leaflet'
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import Supercluster from 'supercluster'
 import type { RestaurantSummary } from '../features/restaurants/types'
 import { scoreTone } from '../features/restaurants/scoreTone'
+import type { ViewportBounds } from '../features/restaurants/viewportBounds'
 
 interface MapViewProps {
   restaurants: RestaurantSummary[]
   selectedId: string | null
   onSelect: (id: string) => void
+  onBoundsChange?: (bounds: ViewportBounds) => void
+  showResetView?: boolean
 }
 
 interface RestaurantPointProps {
@@ -23,6 +26,7 @@ interface ClusterAggregateProps {
 type RestaurantCluster = Supercluster<RestaurantPointProps, ClusterAggregateProps>
 
 const defaultCenter: [number, number] = [30.2747, -97.7404]
+const defaultZoom = 12.5
 const clusterRadius = 15
 const clusterMaxZoom = 16
 
@@ -150,7 +154,7 @@ function LocateButton() {
   return (
     <button
       type="button"
-      className={`locate-button ${status}`}
+      className={`map-icon-button locate-button ${status}`}
       onClick={handleClick}
       disabled={status === 'locating'}
       aria-label={status === 'denied' ? 'Location unavailable' : 'Go to my location'}
@@ -165,16 +169,44 @@ function LocateButton() {
   )
 }
 
-function ClusterMarkers({ index, restaurantsById, selectedId, onSelect }: {
+function ResetViewButton() {
+  const map = useMap()
+
+  return (
+    <button
+      type="button"
+      className="map-icon-button reset-view-button"
+      onClick={() => map.flyTo(defaultCenter, defaultZoom, { duration: 1 })}
+      aria-label="Reset map view"
+      title="Reset map view"
+    >
+      Reset
+    </button>
+  )
+}
+
+function ClusterMarkers({ index, restaurantsById, selectedId, onSelect, onBoundsChange }: {
   index: RestaurantCluster
   restaurantsById: Map<string, RestaurantSummary>
   selectedId: string | null
   onSelect: (id: string) => void
+  onBoundsChange?: (bounds: ViewportBounds) => void
 }) {
   const map = useMap()
   const [viewport, setViewport] = useState(() => ({ bounds: map.getBounds(), zoom: map.getZoom() }))
 
   useMapEvents({ moveend: () => setViewport({ bounds: map.getBounds(), zoom: map.getZoom() }) })
+
+  // useLayoutEffect (not useEffect) so the initial viewport reaches the parent
+  // before first paint, keeping the list scoped to the map from first render.
+  useLayoutEffect(() => {
+    onBoundsChange?.({
+      north: viewport.bounds.getNorth(),
+      south: viewport.bounds.getSouth(),
+      east: viewport.bounds.getEast(),
+      west: viewport.bounds.getWest(),
+    })
+  }, [viewport.bounds, onBoundsChange])
 
   const clusters = useMemo(() => {
     const bounds = viewport.bounds
@@ -219,21 +251,28 @@ function ClusterMarkers({ index, restaurantsById, selectedId, onSelect }: {
   )
 }
 
-export function MapView({ restaurants, selectedId, onSelect }: MapViewProps) {
+// Memoized: rebuilding the Supercluster index and re-rendering markers for
+// thousands of restaurants is expensive, so it should only happen when this
+// component's own props actually change — not on every parent re-render
+// caused by unrelated state, like a keystroke in the search box.
+export const MapView = memo(function MapView({ restaurants, selectedId, onSelect, onBoundsChange, showResetView }: MapViewProps) {
   const selectedRestaurant = restaurants.find(({ id }) => id === selectedId)
   const clusterIndex = useRestaurantClusterIndex(restaurants)
   const restaurantsById = useMemo(() => new Map(restaurants.map((restaurant) => [restaurant.id, restaurant])), [restaurants])
   return (
-    <MapContainer center={defaultCenter} zoom={12.5} className="map" zoomControl={false}>
+    <MapContainer center={defaultCenter} zoom={defaultZoom} className="map" zoomControl={false}>
       <TileLayer attribution={streetTiles.attribution} url={streetTiles.url} />
       <MapResize />
       {/* Must mount before SelectionPan: a large programmatic zoom fires Leaflet's
           moveend synchronously, so ClusterMarkers' listener has to already be
           subscribed (sibling effects run in JSX order) or it misses the event
           and never re-clusters for the new viewport. */}
-      <ClusterMarkers index={clusterIndex} restaurantsById={restaurantsById} selectedId={selectedId} onSelect={onSelect} />
+      <ClusterMarkers index={clusterIndex} restaurantsById={restaurantsById} selectedId={selectedId} onSelect={onSelect} onBoundsChange={onBoundsChange} />
       <SelectionPan restaurant={selectedRestaurant} index={clusterIndex} />
-      <LocateButton />
+      <div className="map-controls">
+        {showResetView && <ResetViewButton />}
+        <LocateButton />
+      </div>
     </MapContainer>
   )
-}
+})

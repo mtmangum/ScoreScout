@@ -1,17 +1,16 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { divIcon } from 'leaflet'
+import { divIcon, type LatLngBounds } from 'leaflet'
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import Supercluster from 'supercluster'
 import type { RestaurantSummary } from '../features/restaurants/types'
 import { scoreTone } from '../features/restaurants/scoreTone'
-import type { ViewportBounds } from '../features/restaurants/viewportBounds'
+import { isValidBounds, type ViewportBounds } from '../features/restaurants/viewportBounds'
 
 interface MapViewProps {
   restaurants: RestaurantSummary[]
   selectedId: string | null
   onSelect: (id: string) => void
   onBoundsChange?: (bounds: ViewportBounds) => void
-  showResetView?: boolean
 }
 
 interface RestaurantPointProps {
@@ -54,6 +53,19 @@ function clusterPin(count: number, worstScore: number) {
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   })
+}
+
+function toViewportBounds(bounds: LatLngBounds): ViewportBounds {
+  return { north: bounds.getNorth(), south: bounds.getSouth(), east: bounds.getEast(), west: bounds.getWest() }
+}
+
+// A container that's mid-layout (not yet its final size) or hidden entirely
+// (display:none, e.g. the mobile map/list tab switch) reports a collapsed or
+// zero-area bounds. Silently drop those instead of forwarding them, so a
+// transient bad reading can never overwrite the last known-good viewport.
+function reportBoundsIfValid(bounds: LatLngBounds, onBoundsChange?: (bounds: ViewportBounds) => void) {
+  const converted = toViewportBounds(bounds)
+  if (isValidBounds(converted)) onBoundsChange?.(converted)
 }
 
 function useRestaurantClusterIndex(restaurants: RestaurantSummary[]) {
@@ -118,16 +130,22 @@ function SelectionPan({ restaurant, index }: { restaurant?: RestaurantSummary; i
 
 // Leaflet caches its container's pixel size at creation time and has no built-in
 // way to notice later layout changes (sidebar reflow, panel open/close, fonts
-// loading async). Without this, the map can keep requesting tiles for a stale
-// viewport size, showing up as tiles that only partially load.
-function MapResize() {
+// loading async, mobile browser chrome settling). Without this, the map can keep
+// requesting tiles for a stale viewport size, showing up as tiles that only
+// partially load. It also re-reports bounds once the size is corrected: if the
+// container was too small at mount, the very first bounds handed to the parent
+// (see ClusterMarkers) would be wrong, and nothing else would ever fix it.
+function MapResize({ onBoundsChange }: { onBoundsChange?: (bounds: ViewportBounds) => void }) {
   const map = useMap()
   useEffect(() => {
     const container = map.getContainer()
-    const observer = new ResizeObserver(() => map.invalidateSize())
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize()
+      reportBoundsIfValid(map.getBounds(), onBoundsChange)
+    })
     observer.observe(container)
     return () => observer.disconnect()
-  }, [map])
+  }, [map, onBoundsChange])
   return null
 }
 
@@ -169,14 +187,39 @@ function LocateButton() {
   )
 }
 
+// Comparing against "does the current view contain every restaurant in the
+// current data set" doesn't work: Austin's full dataset spans well beyond the
+// default view's frame, so that comparison would fail (and the button would
+// show) as soon as live data loads, regardless of whether the user has
+// actually panned or zoomed. Comparing center/zoom to the *realized* initial
+// view is what "hasn't moved from the default view" actually means — Leaflet's
+// default zoomSnap rounds the fractional defaultZoom (12.5) to a whole number
+// internally, so map.getZoom() never equals the literal defaultZoom constant.
+function isSameView(a: { lat: number; lng: number }, aZoom: number, b: { lat: number; lng: number }, bZoom: number) {
+  return Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lng - b.lng) < 1e-4 && Math.abs(aZoom - bZoom) < 1e-6
+}
+
 function ResetViewButton() {
   const map = useMap()
+  const [initialView] = useState(() => ({ center: map.getCenter(), zoom: map.getZoom() }))
+  const [visible, setVisible] = useState(false)
+
+  useMapEvents({
+    moveend: () => setVisible(!isSameView(map.getCenter(), map.getZoom(), initialView.center, initialView.zoom)),
+  })
+
+  if (!visible) return null
 
   return (
     <button
       type="button"
       className="map-icon-button reset-view-button"
-      onClick={() => map.flyTo(defaultCenter, defaultZoom, { duration: 1 })}
+      // Flies back to the *captured* initial view, not the raw defaultCenter/
+      // defaultZoom constants: Leaflet's zoomSnap rounds a fractional initial
+      // zoom prop (12.5) to a whole level (13) at mount, but flyTo honors a
+      // fractional target exactly — so flying to the literal constant would
+      // never match the mounted baseline this button compares against.
+      onClick={() => map.flyTo(initialView.center, initialView.zoom, { duration: 1 })}
       aria-label="Reset map view"
       title="Reset map view"
     >
@@ -200,12 +243,7 @@ function ClusterMarkers({ index, restaurantsById, selectedId, onSelect, onBounds
   // useLayoutEffect (not useEffect) so the initial viewport reaches the parent
   // before first paint, keeping the list scoped to the map from first render.
   useLayoutEffect(() => {
-    onBoundsChange?.({
-      north: viewport.bounds.getNorth(),
-      south: viewport.bounds.getSouth(),
-      east: viewport.bounds.getEast(),
-      west: viewport.bounds.getWest(),
-    })
+    reportBoundsIfValid(viewport.bounds, onBoundsChange)
   }, [viewport.bounds, onBoundsChange])
 
   const clusters = useMemo(() => {
@@ -255,14 +293,14 @@ function ClusterMarkers({ index, restaurantsById, selectedId, onSelect, onBounds
 // thousands of restaurants is expensive, so it should only happen when this
 // component's own props actually change — not on every parent re-render
 // caused by unrelated state, like a keystroke in the search box.
-export const MapView = memo(function MapView({ restaurants, selectedId, onSelect, onBoundsChange, showResetView }: MapViewProps) {
+export const MapView = memo(function MapView({ restaurants, selectedId, onSelect, onBoundsChange }: MapViewProps) {
   const selectedRestaurant = restaurants.find(({ id }) => id === selectedId)
   const clusterIndex = useRestaurantClusterIndex(restaurants)
   const restaurantsById = useMemo(() => new Map(restaurants.map((restaurant) => [restaurant.id, restaurant])), [restaurants])
   return (
     <MapContainer center={defaultCenter} zoom={defaultZoom} className="map" zoomControl={false}>
       <TileLayer attribution={streetTiles.attribution} url={streetTiles.url} />
-      <MapResize />
+      <MapResize onBoundsChange={onBoundsChange} />
       {/* Must mount before SelectionPan: a large programmatic zoom fires Leaflet's
           moveend synchronously, so ClusterMarkers' listener has to already be
           subscribed (sibling effects run in JSX order) or it misses the event
@@ -270,7 +308,7 @@ export const MapView = memo(function MapView({ restaurants, selectedId, onSelect
       <ClusterMarkers index={clusterIndex} restaurantsById={restaurantsById} selectedId={selectedId} onSelect={onSelect} onBoundsChange={onBoundsChange} />
       <SelectionPan restaurant={selectedRestaurant} index={clusterIndex} />
       <div className="map-controls">
-        {showResetView && <ResetViewButton />}
+        <ResetViewButton />
         <LocateButton />
       </div>
     </MapContainer>

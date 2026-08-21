@@ -9,7 +9,7 @@ import { useRestaurants } from '../hooks/useRestaurants'
 import { useTheme } from '../hooks/useTheme'
 import { resolveSelectedRestaurant } from '../features/restaurants/resolveSelectedRestaurant'
 import { composeRestaurantList, mergeRestaurantSources } from '../features/restaurants/favoriteRestaurants'
-import { isWithinBounds, type ViewportBounds } from '../features/restaurants/viewportBounds'
+import { isValidBounds, isWithinBounds, type ViewportBounds } from '../features/restaurants/viewportBounds'
 import scoreScoutLogo from '../assets/scorescout-logo.png'
 
 type RestaurantSort = 'score-desc' | 'score-asc' | 'inspection-desc' | 'name-asc'
@@ -84,20 +84,19 @@ export function ExplorePage() {
     const base = showFavorites ? savedRestaurants : browseRestaurants
     return selected && !base.some(({ id }) => id === selected.id) ? [...base, selected] : base
   }, [showFavorites, savedRestaurants, browseRestaurants, selected])
-  // The reset-view control only earns its place once panning/zooming has actually
-  // cropped something out of view; otherwise it's a button with nothing to do.
-  const isZoomedIn = useMemo(
-    () => bounds !== null && !mapRestaurants.every((restaurant) => isWithinBounds(restaurant, bounds)),
-    [bounds, mapRestaurants],
-  )
+  // A map container measured before its layout has settled (mobile browser chrome,
+  // web fonts reflowing, a hidden tab becoming visible) can report a collapsed
+  // bounds. Treat that the same as "no bounds yet" rather than filtering the list
+  // down to nothing for a reason with no on-screen cause.
+  const validBounds = bounds && isValidBounds(bounds) ? bounds : null
   // Viewport filtering is suspended while a search is active, so a match
   // outside the current map view doesn't silently disappear from the list.
   const visibleBrowseRestaurants = useMemo(() => {
-    if (!bounds || query.trim()) return browseRestaurants
+    if (!validBounds || query.trim()) return browseRestaurants
     return browseRestaurants.filter(
-      (restaurant) => restaurant.id === selected?.id || isWithinBounds(restaurant, bounds),
+      (restaurant) => restaurant.id === selected?.id || isWithinBounds(restaurant, validBounds),
     )
-  }, [browseRestaurants, bounds, query, selected])
+  }, [browseRestaurants, validBounds, query, selected])
   const listRestaurants = useMemo(
     () => composeRestaurantList(savedRestaurants, visibleBrowseRestaurants, favoriteIds, showFavorites),
     [showFavorites, savedRestaurants, visibleBrowseRestaurants, favoriteIds],
@@ -172,7 +171,7 @@ export function ExplorePage() {
           </div>
         </div>
         <div className="results-heading">
-          <div className="results-meta"><strong>{sortedRestaurants.length} places{bounds && !query.trim() && !showFavorites ? ' in view' : ''}</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
+          <div className="results-meta"><strong>{sortedRestaurants.length} places{validBounds && !query.trim() && !showFavorites ? ' in view' : ''}</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
           <div className="results-controls">
             <button className={`saved-filter ${showFavorites ? 'active' : ''}`} type="button" onClick={() => setShowFavorites((current) => !current)} aria-pressed={showFavorites} aria-label={`${showFavorites ? 'Show all restaurants' : 'Show saved restaurants'}; ${favoriteIds.size} saved`}><span aria-hidden="true">★</span> {favoriteIds.size}</button>
             <select className="sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value as RestaurantSort)} aria-label="Sort restaurants">
@@ -197,7 +196,7 @@ export function ExplorePage() {
           <span>{source === 'live' ? 'Data source: City of Austin' : 'Live data unavailable · Sample restaurants shown'}</span>
         </footer>
       </section>
-      <section className="map-region"><MapView restaurants={mapRestaurants} selectedId={selectedId} onSelect={selectRestaurant} onBoundsChange={setBounds} showResetView={isZoomedIn} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
+      <section className="map-region"><MapView restaurants={mapRestaurants} selectedId={selectedId} onSelect={selectRestaurant} onBoundsChange={setBounds} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
       {selected && <RestaurantDetail restaurant={selectedDetail} name={selected.name} onClose={() => navigate('/')} />}
     </main>
   )

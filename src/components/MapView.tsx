@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { divIcon, type LatLngBounds } from 'leaflet'
+import { divIcon, point, type LatLng, type LatLngBounds, type Point } from 'leaflet'
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import Supercluster from 'supercluster'
 import type { RestaurantSummary } from '../features/restaurants/types'
@@ -228,6 +228,81 @@ function ResetViewButton() {
   )
 }
 
+// Many restaurants in the data share a single street address — food courts, malls,
+// stadiums, airport concourses — so their pins sit at (near-)identical coordinates.
+// No zoom level pulls those apart: pixel distance between two points grows with zoom,
+// but two points metres (or zero metres) apart never clear the pin's own width even at
+// the map's practical maximum zoom. Once Supercluster stops grouping them into a single
+// cluster pin, fan the individual leaves out into a small circle/spiral around their
+// shared spot — the same "spiderfy" technique marker-cluster libraries use — so every
+// pin stays its own clickable target regardless of how many restaurants are stacked there.
+const overlapPixelThreshold = 24
+const spiralLengthStart = 11
+const spiralLengthFactor = 5
+const spiralFootSeparation = 28
+const circleSpiralSwitchover = 8
+
+function spiderfyOffsets(count: number): Array<{ x: number; y: number }> {
+  if (count <= circleSpiralSwitchover) {
+    const radius = Math.max(overlapPixelThreshold, (spiralFootSeparation * count) / (2 * Math.PI))
+    return Array.from({ length: count }, (_, i) => {
+      const angle = (2 * Math.PI * i) / count
+      return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) }
+    })
+  }
+  let angle = 0
+  let radius = spiralLengthStart
+  return Array.from({ length: count }, () => {
+    angle += spiralFootSeparation / radius
+    radius += (spiralLengthFactor * Math.PI * 2) / angle
+    return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) }
+  })
+}
+
+// Single-linkage grouping in current-zoom pixel space: a leaf joins a group as soon as
+// it's within overlapPixelThreshold of any existing member, so tight stacks of 3+
+// coincident points merge into one group instead of just pairing up neighbors.
+function groupOverlappingLeaves<T extends { point: Point }>(leaves: T[]): T[][] {
+  const groups: T[][] = []
+  const assigned = new Set<T>()
+  leaves.forEach((leaf) => {
+    if (assigned.has(leaf)) return
+    const group = [leaf]
+    assigned.add(leaf)
+    leaves.forEach((other) => {
+      if (assigned.has(other)) return
+      if (group.some((member) => member.point.distanceTo(other.point) < overlapPixelThreshold)) {
+        group.push(other)
+        assigned.add(other)
+      }
+    })
+    groups.push(group)
+  })
+  return groups
+}
+
+function useOverlapOffsets(
+  leaves: Array<{ restaurantId: string; latitude: number; longitude: number }>,
+  map: ReturnType<typeof useMap>,
+  zoom: number,
+) {
+  return useMemo(() => {
+    const withPoints = leaves.map((leaf) => ({ ...leaf, point: map.project([leaf.latitude, leaf.longitude], zoom) }))
+    const offsets = new Map<string, LatLng>()
+    groupOverlappingLeaves(withPoints).forEach((group) => {
+      if (group.length < 2) return
+      const center = point(
+        group.reduce((sum, member) => sum + member.point.x, 0) / group.length,
+        group.reduce((sum, member) => sum + member.point.y, 0) / group.length,
+      )
+      spiderfyOffsets(group.length).forEach((offset, i) => {
+        offsets.set(group[i].restaurantId, map.unproject(center.add([offset.x, offset.y]), zoom))
+      })
+    })
+    return offsets
+  }, [leaves, map, zoom])
+}
+
 function ClusterMarkers({ index, restaurantsById, selectedId, onSelect, onBoundsChange }: {
   index: RestaurantCluster
   restaurantsById: Map<string, RestaurantSummary>
@@ -251,6 +326,13 @@ function ClusterMarkers({ index, restaurantsById, selectedId, onSelect, onBounds
     const bbox: [number, number, number, number] = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
     return index.getClusters(bbox, Math.round(viewport.zoom))
   }, [index, viewport])
+
+  const restaurantLeaves = useMemo(() => clusters.flatMap((feature) => {
+    if ('cluster' in feature.properties) return []
+    const restaurant = restaurantsById.get(feature.properties.restaurantId)
+    return restaurant ? [{ restaurantId: restaurant.id, latitude: restaurant.latitude, longitude: restaurant.longitude }] : []
+  }), [clusters, restaurantsById])
+  const overlapOffsets = useOverlapOffsets(restaurantLeaves, map, Math.round(viewport.zoom))
 
   return (
     <>
@@ -278,7 +360,7 @@ function ClusterMarkers({ index, restaurantsById, selectedId, onSelect, onBounds
         return (
           <Marker
             key={restaurant.id}
-            position={[restaurant.latitude, restaurant.longitude]}
+            position={overlapOffsets.get(restaurant.id) ?? [restaurant.latitude, restaurant.longitude]}
             icon={scorePin(restaurant.profileScore, selected)}
             zIndexOffset={selected ? 1000 : 0}
             eventHandlers={{ click: () => onSelect(restaurant.id) }}

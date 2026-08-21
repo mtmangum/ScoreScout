@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { Restaurant } from '../features/restaurants/types'
 import { formatFacilityName } from '../features/restaurants/facilityName'
+import { complianceTier } from '../features/restaurants/complianceTier'
 import { ScoreBadge } from './ScoreBadge'
 
 interface RestaurantDetailProps { restaurant: Restaurant | null; name: string; onClose: () => void }
@@ -11,10 +12,15 @@ export function RestaurantDetail({ restaurant, name, onClose }: RestaurantDetail
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const onCloseRef = useRef(onClose)
   const titleId = useId()
+  const [tierExpanded, setTierExpanded] = useState(false)
 
   useEffect(() => {
     onCloseRef.current = onClose
   }, [onClose])
+
+  useEffect(() => {
+    setTierExpanded(false)
+  }, [restaurant?.id])
 
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -72,7 +78,20 @@ export function RestaurantDetail({ restaurant, name, onClose }: RestaurantDetail
 
       <div className="profile-hero">
         <ScoreBadge score={profile.score} size="large" />
-        <div><span>Inspection History Profile</span><strong>{profile.score} / 100</strong></div>
+        <div>
+          <span>Inspection History Profile</span>
+          <strong>{profile.score} / 100</strong>
+          <button
+            type="button"
+            className="tier-toggle"
+            aria-expanded={tierExpanded}
+            onClick={() => setTierExpanded((expanded) => !expanded)}
+          >
+            <span className="tier-toggle-label">{complianceTier(profile.score).label}</span>
+            <span className={`tier-toggle-arrow${tierExpanded ? ' expanded' : ''}`} aria-hidden="true">▾</span>
+          </button>
+          {tierExpanded && <p className="tier-description">{complianceTier(profile.score).description}</p>}
+        </div>
       </div>
 
       <div className="facts">

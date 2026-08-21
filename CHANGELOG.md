@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - The sidebar list now only shows restaurants within the map's current viewport, staying in sync as the map is panned or zoomed, instead of always listing the full (up to ~4871-row) matching population regardless of what's actually visible. A search bypasses this scoping entirely so a match off-screen never silently disappears, and favorites/the open detail panel's restaurant are likewise always kept. The results count reads "N places in view" when the list is viewport-scoped.
 - Added a "Reset" button next to the map's locate control that flies back to the default Austin view; it only appears once the map has actually been panned or zoomed away from that default.
 - Added a slim top-of-page loading bar, driven by the same loading state already used for the "Loading Austin data…" label, so an in-progress data fetch (initial load, or after clearing a search) reads as "still working" instead of looking hung.
+- Added compliance-tier context (e.g. "Excellent Compliance", "Marginal Compliance") to the restaurant detail panel's score hero, based on Austin's official 90/80/70 inspection score bands. The tier label sits under the score; clicking it expands a one-line explanation of what that tier means.
 
 ### Fixed
 

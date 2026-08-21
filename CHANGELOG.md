@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Stripped leading permit-record prefixes (`OOB - `, `PF - `, `BC - `) from facility names in the list, favorite button label, and detail modal. These come straight from Austin's source feed and misleadingly read as status codes (e.g. "OOB" as "out of business") even for open, trading restaurants. Matching, search, sorting, and URL slugs still use the raw name.
 - Fixed noticeable input lag when typing in the search box: the restaurant list and map weren't memoized, so every keystroke re-rendered thousands of list rows and rebuilt the map's marker clustering even though the underlying data hadn't changed yet (the search query is debounced before it triggers a real fetch).
 - Fixed the viewport-scoped list going permanently empty on mobile after switching from the Map tab to the List tab (and, more generally, on any device where the map container is measured before its layout has settled). Hiding the map via `display:none` collapses Leaflet's reported bounds to a degenerate rectangle; that bad reading is now dropped at the source instead of overwriting the last known-good viewport, so the list keeps showing whatever it last correctly had in view.
+- Fixed the detail panel's "How this was calculated" explanation text rendering nearly illegible in dark mode: it used a hardcoded light-mode gray instead of a theme-aware color.
 
 ## [1.1.0] - 2026-08-20
 

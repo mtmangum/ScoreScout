@@ -46,6 +46,15 @@ const fixtures: Array<Omit<Restaurant, 'profile' | 'inspections'> & { inspection
       { id: 'i15', date: '2024-04-15', score: 86, processDescription: 'Routine Inspection' },
     ],
   },
+  {
+    id: '6', cityCode: 'AUS', routeId: '06', facilityId: 'AUS-1006', name: 'Rainey Street Cantina', address: '80 Rainey St, Austin, TX', latitude: 30.2586, longitude: -97.7378,
+    communityRating: { source: 'Google Places', sourceBusinessId: 'fixture-6', rating: 4.1, reviewCount: 502, sourceUrl: 'https://maps.google.com/', matchedAt: '2026-08-17', refreshedAt: '2026-08-17', matchConfidence: 0.95 },
+    inspections: [
+      { id: 'i16', date: '2026-05-28', score: 84, processDescription: 'Routine Inspection' },
+      { id: 'i17', date: '2025-10-02', score: 85, processDescription: 'Routine Inspection' },
+      { id: 'i18', date: '2025-02-14', score: 83, processDescription: 'Routine Inspection' },
+    ],
+  },
 ]
 
 export const restaurants: Restaurant[] = fixtures.map((restaurant) => ({

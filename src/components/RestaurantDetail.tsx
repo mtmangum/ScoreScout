@@ -53,6 +53,7 @@ export function RestaurantDetail({ restaurant, name, onClose }: RestaurantDetail
 
   const latest = restaurant.inspections[0]
   const profile = restaurant.profile
+  const tier = complianceTier(profile.score)
   const trendWord = profile.trendAdjustment > 0.2 ? 'improving' : profile.trendAdjustment < -0.2 ? 'declining' : 'steady'
   const chartInspections = restaurant.inspections.slice(0, 4).reverse()
   const chartMinimum = Math.min(60, Math.floor(Math.min(...chartInspections.map(({ score }) => score)) / 10) * 10)
@@ -87,10 +88,11 @@ export function RestaurantDetail({ restaurant, name, onClose }: RestaurantDetail
             aria-expanded={tierExpanded}
             onClick={() => setTierExpanded((expanded) => !expanded)}
           >
-            <span className="tier-toggle-label">{complianceTier(profile.score).label}</span>
+            <span className={`tier-dot tier-dot-${tier.tone}`} aria-hidden="true" />
+            <span className="tier-toggle-label">{tier.label}</span>
             <span className={`tier-toggle-arrow${tierExpanded ? ' expanded' : ''}`} aria-hidden="true">▾</span>
           </button>
-          {tierExpanded && <p className="tier-description">{complianceTier(profile.score).description}</p>}
+          {tierExpanded && <p className="tier-description">{tier.description}</p>}
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { MapView } from '../components/MapView'
 import { RestaurantDetail } from '../components/RestaurantDetail'
 import { RestaurantList } from '../components/RestaurantList'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useFavorites } from '../hooks/useFavorites'
 import { useRestaurantDetail } from '../hooks/useRestaurantDetail'
 import { useRestaurants } from '../hooks/useRestaurants'
@@ -46,12 +47,16 @@ export function ExplorePage() {
   const navigate = useNavigate()
   const { facilityId, restaurantKey, cityCode } = useParams<{ facilityId: string; restaurantKey: string; cityCode: string }>()
   const [query, setQuery] = useState('')
+  // Debounced separately from `query` itself: the input stays instantly
+  // responsive to every keystroke, while the fetch and the derived lists below
+  // only redo their work once typing has settled (instant again once cleared).
+  const debouncedQuery = useDebouncedValue(query, query.trim() ? 300 : 0)
   const [includeAllFacilities, setIncludeAllFacilities] = useState(false)
   const routeSuffix = restaurantKey?.match(/-(\d+)$/)?.[1]
   const target = cityCode ? { routeId: routeSuffix } : { facilityId: facilityId ?? routeSuffix }
   // A direct institutional link is included alongside the default category,
   // without broadening the whole list to every facility type.
-  const { restaurants, source, loading } = useRestaurants(query, includeAllFacilities, target)
+  const { restaurants, source, loading } = useRestaurants(debouncedQuery, includeAllFacilities, target)
   const { favoriteIds, favoriteRestaurants, toggleFavorite } = useFavorites()
   const { theme, toggleTheme } = useTheme()
   const [scoreMinimum, setScoreMinimum] = useState(50)
@@ -93,11 +98,11 @@ export function ExplorePage() {
   // Viewport filtering is suspended while a search is active, so a match
   // outside the current map view doesn't silently disappear from the list.
   const visibleBrowseRestaurants = useMemo(() => {
-    if (!validBounds || query.trim()) return browseRestaurants
+    if (!validBounds || debouncedQuery.trim()) return browseRestaurants
     return browseRestaurants.filter(
       (restaurant) => restaurant.id === selected?.id || isWithinBounds(restaurant, validBounds),
     )
-  }, [browseRestaurants, validBounds, query, selected])
+  }, [browseRestaurants, validBounds, debouncedQuery, selected])
   const listRestaurants = useMemo(
     () => composeRestaurantList(savedRestaurants, visibleBrowseRestaurants, favoriteIds, showFavorites),
     [showFavorites, savedRestaurants, visibleBrowseRestaurants, favoriteIds],
@@ -173,7 +178,7 @@ export function ExplorePage() {
           </div>
         </div>
         <div className="results-heading">
-          <div className="results-meta"><strong>{sortedRestaurants.length} places{validBounds && !query.trim() && !showFavorites ? ' in view' : ''}</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
+          <div className="results-meta"><strong>{sortedRestaurants.length} places{validBounds && !debouncedQuery.trim() && !showFavorites ? ' in view' : ''}</strong><span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Live Austin data' : 'Showing sample data'}</span></div>
           <div className="results-controls">
             <button className={`saved-filter ${showFavorites ? 'active' : ''}`} type="button" onClick={() => setShowFavorites((current) => !current)} aria-pressed={showFavorites} aria-label={`${showFavorites ? 'Show all restaurants' : 'Show saved restaurants'}; ${favoriteIds.size} saved`}><span aria-hidden="true">★</span> {favoriteIds.size}</button>
             <select className="sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value as RestaurantSort)} aria-label="Sort restaurants">
@@ -195,7 +200,7 @@ export function ExplorePage() {
               <span><strong>Show all inspected facilities</strong><small>Includes identified schools, hospitals, nursing facilities, and similar institutional locations.</small></span>
             </label>
           </details>
-          <span>{source === 'live' ? 'Data source: City of Austin' : 'Live data unavailable · Sample restaurants shown'}</span>
+          <span>{loading ? 'Loading Austin data…' : source === 'live' ? 'Data source: City of Austin' : 'Live data unavailable · Sample restaurants shown'}</span>
         </footer>
       </section>
       <section className="map-region"><MapView restaurants={mapRestaurants} selectedId={selectedId} onSelect={selectRestaurant} onBoundsChange={setBounds} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot satisfactory" />80–89</span><span><i className="dot marginal" />70–79</span><span><i className="dot low" />Below 70</span></div></section>

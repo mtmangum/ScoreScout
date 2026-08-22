@@ -58,7 +58,7 @@ footer { padding:9px 25px 10px; font-size:9px; color:var(--muted); border-top:1p
   .filters .search { display:none; }
   .detail-panel { inset:10px; width:auto; }
   .legend { bottom:12px; left:12px; }
-  .map-controls { bottom:12px; right:12px; }
+  .map-controls { bottom:28px; right:12px; }
   .filters { padding-top:16px; }
   .pinned-restaurants { max-height:50%; }
 }

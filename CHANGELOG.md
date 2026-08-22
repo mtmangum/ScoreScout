@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Fixed the viewport-scoped list going permanently empty on mobile after switching from the Map tab to the List tab (and, more generally, on any device where the map container is measured before its layout has settled). Hiding the map via `display:none` collapses Leaflet's reported bounds to a degenerate rectangle; that bad reading is now dropped at the source instead of overwriting the last known-good viewport, so the list keeps showing whatever it last correctly had in view.
 - Fixed the detail panel's "How this was calculated" explanation text rendering nearly illegible in dark mode: it used a hardcoded light-mode gray instead of a theme-aware color.
 - Fixed the map's Reset and locate buttons rendering behind the detail panel (both sit at the same bottom-right corner) whenever a restaurant card was open. They're now hidden while the panel is open instead of sitting invisibly underneath it.
+- Fixed the map's Reset and locate buttons visually overlapping Leaflet's attribution strip on mobile and tablet-portrait widths; their bottom offset wasn't large enough to clear it at that breakpoint's tighter spacing.
 
 ## [1.1.0] - 2026-08-20
 

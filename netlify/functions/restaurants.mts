@@ -133,12 +133,37 @@ export default async (request: Request) => {
 
     const pageSize = 1000
     const rowCeiling = 20000
-    const rows: ExplorerRow[] = []
-    for (let offset = 0; offset < rowCeiling; offset += pageSize) {
+    const maxPageIndex = rowCeiling / pageSize
+    const fetchPage = async (pageIndex: number) => {
+      const offset = pageIndex * pageSize
       const response = await supabaseRequest(`restaurant_explorer_classified?${query}`, { headers: { Range: `${offset}-${offset + pageSize - 1}` } })
-      const page = await response.json() as ExplorerRow[]
-      rows.push(...page)
-      if (page.length < pageSize) break
+      return await response.json() as ExplorerRow[]
+    }
+
+    // A search or specific-target request typically matches well under 1,000
+    // rows — fetch just the first page, and only parallelize further if it's
+    // unexpectedly full. The unfiltered browse case (no search, no target)
+    // reliably needs several pages (~5-7 today); firing those in parallel from
+    // the start avoids paying for page 0 alone before even starting the rest,
+    // which is what turned this into several seconds of sequential round trips.
+    // (Firing extra pages speculatively for a narrow request was tried and
+    // measured slower than one request alone — the wasted concurrent empty-page
+    // queries contend for the same database resources and slow down the page
+    // that actually has data.)
+    const isNarrowRequest = Boolean(search || targetRoute || targetFacility)
+    const parallelBatchSize = 6
+    const rows: ExplorerRow[] = []
+    let nextPageIndex = 0
+    let keepGoing = true
+    let isFirstWave = true
+    while (keepGoing && nextPageIndex < maxPageIndex) {
+      const waveSize = isFirstWave && isNarrowRequest ? 1 : parallelBatchSize
+      isFirstWave = false
+      const waveIndexes = Array.from({ length: Math.min(waveSize, maxPageIndex - nextPageIndex) }, (_, i) => nextPageIndex + i)
+      const wavePages = await Promise.all(waveIndexes.map(fetchPage))
+      for (const page of wavePages) rows.push(...page)
+      nextPageIndex += waveIndexes.length
+      keepGoing = wavePages[wavePages.length - 1].length === pageSize
     }
     return Response.json({ restaurants: rows.map(toSummary), source: 'live' }, { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=300' } })
   } catch (error) {

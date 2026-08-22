@@ -389,7 +389,7 @@ export const MapView = memo(function MapView({ restaurants, selectedId, onSelect
           and never re-clusters for the new viewport. */}
       <ClusterMarkers index={clusterIndex} restaurantsById={restaurantsById} selectedId={selectedId} onSelect={onSelect} onBoundsChange={onBoundsChange} />
       <SelectionPan restaurant={selectedRestaurant} index={clusterIndex} />
-      <div className="map-controls">
+      <div className={`map-controls${selectedId ? ' detail-open' : ''}`}>
         <ResetViewButton />
         <LocateButton />
       </div>

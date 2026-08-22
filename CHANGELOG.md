@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Fixed noticeable input lag when typing in the search box: the restaurant list and map weren't memoized, so every keystroke re-rendered thousands of list rows and rebuilt the map's marker clustering even though the underlying data hadn't changed yet (the search query is debounced before it triggers a real fetch).
 - Fixed the viewport-scoped list going permanently empty on mobile after switching from the Map tab to the List tab (and, more generally, on any device where the map container is measured before its layout has settled). Hiding the map via `display:none` collapses Leaflet's reported bounds to a degenerate rectangle; that bad reading is now dropped at the source instead of overwriting the last known-good viewport, so the list keeps showing whatever it last correctly had in view.
 - Fixed the detail panel's "How this was calculated" explanation text rendering nearly illegible in dark mode: it used a hardcoded light-mode gray instead of a theme-aware color.
+- Fixed the map's Reset and locate buttons rendering behind the detail panel (both sit at the same bottom-right corner) whenever a restaurant card was open. They're now hidden while the panel is open instead of sitting invisibly underneath it.
 
 ## [1.1.0] - 2026-08-20
 

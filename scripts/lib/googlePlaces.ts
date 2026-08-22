@@ -15,7 +15,7 @@ export interface GooglePlace {
   googleMapsUri?: string
 }
 
-const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
+export const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
 
 function similarity(left: string, right: string) {
   const a = normalize(left)

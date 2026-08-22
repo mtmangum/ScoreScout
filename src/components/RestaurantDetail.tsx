@@ -117,9 +117,10 @@ export function RestaurantDetail({ restaurant, name, onClose }: RestaurantDetail
         <div className="score-chart">
           <svg viewBox="0 0 340 158" role="img" aria-label={`Official inspection scores over time: ${chartInspections.map(({ score }) => score).join(', ')}`}>
             <rect className="chart-band chart-high" x={chartLeft} y={chartY(100)} width={chartRight - chartLeft} height={chartY(90) - chartY(100)} />
-            <rect className="chart-band chart-medium" x={chartLeft} y={chartY(90)} width={chartRight - chartLeft} height={chartY(70) - chartY(90)} />
+            <rect className="chart-band chart-satisfactory" x={chartLeft} y={chartY(90)} width={chartRight - chartLeft} height={chartY(80) - chartY(90)} />
+            <rect className="chart-band chart-marginal" x={chartLeft} y={chartY(80)} width={chartRight - chartLeft} height={chartY(70) - chartY(80)} />
             {chartMinimum < 70 && <rect className="chart-band chart-low" x={chartLeft} y={chartY(70)} width={chartRight - chartLeft} height={chartY(chartMinimum) - chartY(70)} />}
-            {[100, 90, 70, chartMinimum].filter((value, index, values) => values.indexOf(value) === index).map((value) => (
+            {[100, 90, 80, 70, chartMinimum].filter((value, index, values) => values.indexOf(value) === index).map((value) => (
               <g key={value}><line className="chart-grid" x1={chartLeft} x2={chartRight} y1={chartY(value)} y2={chartY(value)} /><text className="chart-axis" x={chartLeft - 7} y={chartY(value) + 3}>{value}</text></g>
             ))}
             {chartInspections.length > 1 && <polyline className="chart-line" points={chartPoints} />}
@@ -131,7 +132,7 @@ export function RestaurantDetail({ restaurant, name, onClose }: RestaurantDetail
               </g>
             ))}
           </svg>
-          <div className="chart-legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div>
+          <div className="chart-legend"><span><i className="dot high" />90–100</span><span><i className="dot satisfactory" />80–89</span><span><i className="dot marginal" />70–79</span><span><i className="dot low" />Below 70</span></div>
         </div>
       </section>
 

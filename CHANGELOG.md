@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- Replaced the muddy brown "medium" (70-89) score color used across score badges, map pins, list rows, and the legend with a vivid gold/orange, consistent between light and dark themes. Those badges and pins now use dark text instead of white to stay legible against the brighter fill.
+- Split the single muddy-brown "medium" (70-89) score color, used across score badges, map pins, list rows, the legend, and the score history chart, into two distinct bands matching the compliance-tier breakdown: 80-89 gold, 70-79 orange. The below-70 red was also made more vivid. All four bands are now consistent between light and dark themes.
 
 ### Fixed
 

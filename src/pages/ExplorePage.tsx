@@ -8,6 +8,7 @@ import { useRestaurantDetail } from '../hooks/useRestaurantDetail'
 import { useRestaurants } from '../hooks/useRestaurants'
 import { useTheme } from '../hooks/useTheme'
 import { resolveSelectedRestaurant } from '../features/restaurants/resolveSelectedRestaurant'
+import { scoreTone } from '../features/restaurants/scoreTone'
 import { composeRestaurantList, mergeRestaurantSources } from '../features/restaurants/favoriteRestaurants'
 import { isValidBounds, isWithinBounds, type ViewportBounds } from '../features/restaurants/viewportBounds'
 import scoreScoutLogo from '../assets/scorescout-logo.png'
@@ -111,7 +112,8 @@ export function ExplorePage() {
       return a.name.localeCompare(b.name)
     })
   }, [listRestaurants, sortBy, favoriteIds])
-  const scoreColor = (score: number) => score >= 90 ? 'var(--green)' : score >= 70 ? 'var(--amber)' : 'var(--red)'
+  const scoreColorByTone = { high: 'var(--green)', satisfactory: 'var(--satisfactory)', marginal: 'var(--marginal)', low: 'var(--red)' } as const
+  const scoreColor = (score: number) => scoreColorByTone[scoreTone(score)]
   const minimumProgress = (scoreMinimum - 50) * 2
   const maximumProgress = (scoreMaximum - 50) * 2
   // Memoized so RestaurantList/MapView (both React.memo'd, both expensive to
@@ -196,7 +198,7 @@ export function ExplorePage() {
           <span>{source === 'live' ? 'Data source: City of Austin' : 'Live data unavailable · Sample restaurants shown'}</span>
         </footer>
       </section>
-      <section className="map-region"><MapView restaurants={mapRestaurants} selectedId={selectedId} onSelect={selectRestaurant} onBoundsChange={setBounds} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot medium" />70–89</span><span><i className="dot low" />Below 70</span></div></section>
+      <section className="map-region"><MapView restaurants={mapRestaurants} selectedId={selectedId} onSelect={selectRestaurant} onBoundsChange={setBounds} /><div className="legend"><span><i className="dot high" />90–100</span><span><i className="dot satisfactory" />80–89</span><span><i className="dot marginal" />70–79</span><span><i className="dot low" />Below 70</span></div></section>
       {selected && <RestaurantDetail restaurant={selectedDetail} name={selected.name} onClose={() => navigate('/')} />}
     </main>
   )
